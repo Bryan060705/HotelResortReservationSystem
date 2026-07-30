@@ -9,6 +9,8 @@ import control.VipReportController;
 import control.VipRoomAllocationController;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Scanner;
 
@@ -21,6 +23,9 @@ public class HotelSystemUI {
     private final VipRoomAllocationController allocationController;
     private final VipReportController reportController;
     private final Scanner scanner;
+    
+    private final List<HousekeepingTask> housekeepingTasks;
+    private int taskCounter = 1;
 
     // Receives the control objects and the Scanner used for user input.
     public HotelSystemUI(AuthenticationController authenticationController,
@@ -35,6 +40,7 @@ public class HotelSystemUI {
         this.allocationController = allocationController;
         this.reportController = reportController;
         this.scanner = scanner;
+        this.housekeepingTasks = new ArrayList<>();
     }
 
     // Runs the login screen and returns to it whenever a staff member logs out.
@@ -110,9 +116,8 @@ public class HotelSystemUI {
                     runVipModule(loggedInStaff);
                     break;
                 case 3:
-                    displayUnavailableModule(
-                            "Housekeeping & Task Log", "Bong Xin Yee");
-                    pause();
+                    runHousekeepingModule(loggedInStaff);
+
                     break;
                 case 4:
                     displayUnavailableModule(
@@ -479,6 +484,429 @@ public class HotelSystemUI {
             }
         }
         throw new IllegalArgumentException("Selection was not found.");
+    }
+    
+    // ==============================
+    // HOUSEKEEPING MODULE
+    // ==============================
+
+    private void runHousekeepingModule(
+            AuthenticationController.LoginResult loggedInStaff) {
+
+        boolean moduleOpen = true;
+
+        while (moduleOpen) {
+
+            displayHousekeepingMenu(loggedInStaff);
+
+            int choice = readInt(
+                    "[COMMAND] > Select choice (0-3): ",
+                    0,
+                    3
+            );
+
+            System.out.println();
+
+            switch (choice) {
+
+                case 1:
+                    createTask();
+                    break;
+
+                case 2:
+                    viewTasks();
+                    break;
+
+                case 3:
+                    updateTaskStatus();
+                    break;
+
+                case 0:
+                    moduleOpen = false;
+                    break;
+
+                default:
+                    throw new IllegalStateException(
+                            "Unexpected housekeeping menu choice.");
+            }
+
+            if (moduleOpen) {
+                pause();
+            }
+        }
+    }
+
+
+    // Display housekeeping menu
+    private void displayHousekeepingMenu(
+            AuthenticationController.LoginResult loggedInStaff) {
+
+        printDivider('=');
+        printCentered("HOUSEKEEPING & TASK LOG");
+        printDivider('=');
+
+        System.out.println("LOGGED IN STAFF : "
+                + loggedInStaff.fullName()
+                + " (" + loggedInStaff.role() + ")");
+
+        System.out.println("STAFF ID        : "
+                + loggedInStaff.staffId());
+
+        printDivider('-');
+
+        System.out.println("  1. Create Housekeeping Task");
+        System.out.println("  2. View Housekeeping Task List");
+        System.out.println("  3. Update Task Status");
+        System.out.println("  0. Return to Main Menu");
+
+        printDivider('-');
+    }
+
+
+    // Create new housekeeping task
+    private void createTask() {
+
+        System.out.println("--- CREATE HOUSEKEEPING TASK ---");
+
+        String roomNumber = readRequiredText(
+                "Room Number       : ");
+
+
+        System.out.println();
+
+        System.out.println("Task Description Guidelines:");
+        System.out.println("- Cleaning required");
+        System.out.println("- Maintenance issue");
+        System.out.println("- Replace room items");
+        System.out.println("- Other housekeeping request");
+
+        System.out.println();
+
+
+        String description = readRequiredText(
+                "Task Description  : ");
+
+
+        HousekeepingTask task =
+                new HousekeepingTask(
+                        String.valueOf(taskCounter++),
+                        roomNumber,
+                        description
+                );
+
+
+        housekeepingTasks.add(task);
+
+
+        System.out.println();
+
+        System.out.println("[SUCCESS] Housekeeping task created.");
+        System.out.println("Task ID           : "
+                + task.getTaskId());
+
+        System.out.println("Room Number       : "
+                + task.getRoomNumber());
+
+        System.out.println("Task              : "
+                + task.getDescription());
+
+        System.out.println("Status            : "
+                + task.getStatus());
+    }
+
+
+    // Display all housekeeping tasks
+    private void viewTasks() {
+
+        System.out.println("--- HOUSEKEEPING TASK LIST ---");
+
+
+        if (housekeepingTasks.isEmpty()) {
+
+            System.out.println(
+                    "No housekeeping tasks available.");
+
+            return;
+        }
+
+
+        for (HousekeepingTask task : housekeepingTasks) {
+
+            System.out.println("--------------------------------");
+
+            System.out.println("Task ID      : "
+                    + task.getTaskId());
+
+            System.out.println("Room Number  : "
+                    + task.getRoomNumber());
+
+            System.out.println("Description  : "
+                    + task.getDescription());
+
+            System.out.println("Status       : "
+                    + task.getStatus());
+        }
+
+        System.out.println("--------------------------------");
+    }
+
+
+    // Update existing task status
+    private void updateTaskStatus() {
+
+        System.out.println("--- UPDATE TASK STATUS ---");
+
+
+        if (housekeepingTasks.isEmpty()) {
+
+            System.out.println(
+                    "[ERROR] No housekeeping task available.");
+
+            return;
+        }
+
+
+        while (true) {
+
+
+            System.out.println();
+
+            System.out.println(
+                    "Please enter the Task ID to update.");
+
+            System.out.println(
+                    "Enter 0 if you want to return to the previous menu.");
+
+            System.out.println();
+
+
+            String taskId = readRequiredText(
+                    "Task ID : ");
+
+
+            // Return to previous menu
+            if (taskId.equals("0")) {
+
+                return;
+            }
+
+
+            HousekeepingTask selectedTask = null;
+
+
+            // Search task by ID
+            for (HousekeepingTask task : housekeepingTasks) {
+
+                if (task.getTaskId().equals(taskId)) {
+
+                    selectedTask = task;
+                    break;
+                }
+            }
+
+
+            // Task ID not found
+            if (selectedTask == null) {
+
+                System.out.println();
+
+                System.out.println(
+                        "[ERROR] Task ID does not exist.");
+
+                System.out.print(
+                        "Would you like to try another Task ID? (Y/N): ");
+
+                String answer = readLine()
+                        .trim()
+                        .toUpperCase();
+
+
+                if (answer.equals("Y")) {
+
+                    continue;
+
+                } else {
+
+                    return;
+                }
+            }
+
+            // Display selected task information
+            System.out.println();
+
+            System.out.println("Task Information");
+            System.out.println("------------------------------");
+
+            System.out.println("Room Number : "
+                    + selectedTask.getRoomNumber());
+
+            System.out.println("Description : "
+                    + selectedTask.getDescription());
+
+            System.out.println("Current Status : "
+                    + selectedTask.getStatus());
+
+
+            System.out.println();
+
+        System.out.println("Update Options:");
+
+        // Allow description editing only when task is Pending
+        if (selectedTask.getStatus().equals("Pending")) {
+
+            System.out.println();
+            System.out.println("This task is still Pending.");
+            System.out.println("You may update the task description.");
+
+            System.out.println("Do you want to edit description?");
+            System.out.println("1. Yes");
+            System.out.println("2. No");
+
+            int editChoice = readInt(
+                    "Choice : ",
+                    1,
+                    2
+            );
+
+
+            if (editChoice == 1) {
+
+                String newDescription = readRequiredText(
+                        "New Description : "
+                );
+
+                selectedTask.setDescription(newDescription);
+
+                System.out.println(
+                        "[SUCCESS] Task description updated."
+                );
+            }
+
+        } else {
+
+            System.out.println();
+            System.out.println(
+                "[INFO] Description cannot be edited because task status is "
+                + selectedTask.getStatus()
+            );
+        }
+
+
+        // Status update option
+
+        System.out.println();
+        System.out.println("Select New Status:");
+        System.out.println("1. Pending");
+        System.out.println("2. Cleaning");
+        System.out.println("3. Completed");
+        System.out.println("4. Cancelled");
+
+
+        int choice = readInt(
+                "New Status : ",
+                1,
+                4);
+
+
+
+            switch (choice) {
+
+                case 1:
+                    selectedTask.setStatus("Pending");
+                    break;
+
+                case 2:
+                    selectedTask.setStatus("Cleaning");
+                    break;
+
+                case 3:
+                    selectedTask.setStatus("Completed");
+                    break;
+
+                case 4:
+                    selectedTask.setStatus("Cancelled");
+                    break;
+            }
+
+
+            System.out.println();
+
+            System.out.println(
+                    "[SUCCESS] Task status updated.");
+
+            System.out.println(
+                    "Task ID    : "
+                    + selectedTask.getTaskId());
+
+            System.out.println(
+                    "New Status : "
+                    + selectedTask.getStatus());
+
+
+            // Exit after successful update
+            break;
+        }
+    }
+
+
+    // ==============================
+    // HOUSEKEEPING TASK OBJECT
+    // ==============================
+
+    private static class HousekeepingTask {
+
+        private final String taskId;
+        private final String roomNumber;
+        private String description;
+
+        private String status;
+
+
+        private HousekeepingTask(
+                String taskId,
+                String roomNumber,
+                String description) {
+
+            this.taskId = taskId;
+            this.roomNumber = roomNumber;
+            this.description = description;
+
+            this.status = "Pending";
+        }
+
+
+        public String getTaskId() {
+
+            return taskId;
+        }
+
+
+        public String getRoomNumber() {
+
+            return roomNumber;
+        }
+
+
+        public String getDescription() {
+
+            return description;
+        }
+        
+        public void setDescription(String description) {
+
+            this.description = description;
+        }
+
+        public String getStatus() {
+
+            return status;
+        }
+
+
+        public void setStatus(String status) {
+
+            this.status = status;
+        }
     }
 
     // Reads text repeatedly until the user enters a non-empty value.
