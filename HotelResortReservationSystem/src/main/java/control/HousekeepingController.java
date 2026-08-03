@@ -1,7 +1,7 @@
 /*
  * Author: Bong Xin Yee
- * Orchestrates room cleaning status tracking, staff task assignment, and
- * the rollback/undo history for housekeeping status changes.
+ * Controls housekeeping operations, including room status,
+ * staff assignment, and rollback history.
  */
 package control;
 
@@ -92,7 +92,7 @@ public final class HousekeepingController {
         return views;
     }
 
-    // Converts a housekeeping record into its read-only display view.
+    // Creates a display view from the housekeeping record.
     private RoomStatusView toView(HousekeepingRecord record) {
         long turnaround = record.getTurnaroundMinutes();
         String turnaroundText = turnaround < 0 ? "--" : turnaround + " mins";
@@ -164,8 +164,7 @@ public final class HousekeepingController {
                 taskId, undoStack.size());
     }
 
-    // Pops the most recently logged task off the rollback stack and
-    // reverts that room's cleaning status back to what it was before.
+    // Undo the most recent status update. (Stack)
     public RollbackResult rollbackLastTask() {
         if (undoStack.isEmpty()) {
             return new RollbackResult(false,

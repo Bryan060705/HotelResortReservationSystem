@@ -3,14 +3,13 @@
  * Application composition root for the VIP room allocation module.
  */
 package hotelresortreservationsystem;
-
 import boundary.HotelSystemUI;
 import control.AuthenticationController;
+import control.HousekeepingController;
 import control.VipReportController;
 import control.VipRoomAllocationController;
 import entity.HotelDataStore;
 import java.util.Scanner;
-
 public class HotelResortReservationSystem {
     // Creates the control and boundary objects, then starts the console program.
     public static void main(String[] args) {
@@ -21,11 +20,12 @@ public class HotelResortReservationSystem {
                 = new VipRoomAllocationController(sharedHotelData);
         VipReportController reportController
                 = new VipReportController(allocationController);
-
+        HousekeepingController housekeepingController
+                = new HousekeepingController(sharedHotelData);
         try (Scanner scanner = new Scanner(System.in)) {
             HotelSystemUI userInterface = new HotelSystemUI(
                     authenticationController, allocationController,
-                    reportController, scanner);
+                    reportController, housekeepingController, scanner);
             userInterface.run();
         }
     }
