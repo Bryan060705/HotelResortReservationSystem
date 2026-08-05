@@ -30,10 +30,11 @@ public class HotelSystemUI {
             VipRoomAllocationController allocationController,
             VipReportController reportController,
             HousekeepingController housekeepingController,
+            BookingUI bookingUI,
             Scanner scanner) {
         if (authenticationController == null || allocationController == null
                 || reportController == null || housekeepingController == null
-                || scanner == null) {
+                || bookingUI == null || scanner == null) {
             throw new IllegalArgumentException(
                     "Controllers and input scanner are required.");
         }
@@ -41,6 +42,7 @@ public class HotelSystemUI {
         this.allocationController = allocationController;
         this.reportController = reportController;
         this.housekeepingController = housekeepingController;
+        this.bookingUI = bookingUI;
         this.scanner = scanner;
     }
 
