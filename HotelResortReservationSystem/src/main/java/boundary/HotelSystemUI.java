@@ -15,6 +15,7 @@ import java.util.Locale;
 import java.util.Scanner;
 
 public class HotelSystemUI {
+    private final BookingUI bookingUI;
     private static final int SCREEN_WIDTH = 116;
     private static final DateTimeFormatter DATE_TIME_FORMAT
             = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -34,7 +35,7 @@ public class HotelSystemUI {
             Scanner scanner) {
         if (authenticationController == null || allocationController == null
                 || reportController == null || housekeepingController == null
-                || bookingUI == null || scanner == null) {
+                || bookingUI == null ||scanner == null) {
             throw new IllegalArgumentException(
                     "Controllers and input scanner are required.");
         }
@@ -111,9 +112,7 @@ public class HotelSystemUI {
             System.out.println();
             switch (choice) {
                 case 1:
-                    displayUnavailableModule(
-                            "Walk-In Registration & Booking", "Tang Hong Yi");
-                    pause();
+                    bookingUI.startMenu();
                     break;
                 case 2:
                     runVipModule(loggedInStaff);
