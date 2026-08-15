@@ -8,7 +8,6 @@ import control.AuthenticationController;
 import control.HousekeepingController;
 import control.VipReportController;
 import control.VipRoomAllocationController;
-import entity.CleaningTask;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
@@ -16,6 +15,7 @@ import java.util.Scanner;
 
 public class HotelSystemUI {
     private final BookingUI bookingUI;
+    private final HousekeepingUI housekeepingUI;
     private static final int SCREEN_WIDTH = 116;
     private static final DateTimeFormatter DATE_TIME_FORMAT
             = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -26,24 +26,26 @@ public class HotelSystemUI {
     private final HousekeepingController housekeepingController;
     private final Scanner scanner;
 
-    // Receives the control objects and the Scanner used for user input.
+    // Receives the control objects, module boundary objects, and the Scanner used for user input.
     public HotelSystemUI(AuthenticationController authenticationController,
             VipRoomAllocationController allocationController,
             VipReportController reportController,
             HousekeepingController housekeepingController,
             BookingUI bookingUI,
+            HousekeepingUI housekeepingUI,
             Scanner scanner) {
         if (authenticationController == null || allocationController == null
                 || reportController == null || housekeepingController == null
-                || bookingUI == null ||scanner == null) {
+                || bookingUI == null || housekeepingUI == null || scanner == null) {
             throw new IllegalArgumentException(
-                    "Controllers and input scanner are required.");
+                    "Controllers, boundary UIs, and input scanner are required.");
         }
         this.authenticationController = authenticationController;
         this.allocationController = allocationController;
         this.reportController = reportController;
         this.housekeepingController = housekeepingController;
         this.bookingUI = bookingUI;
+        this.housekeepingUI = housekeepingUI;
         this.scanner = scanner;
     }
 
@@ -118,14 +120,16 @@ public class HotelSystemUI {
                     runVipModule(loggedInStaff);
                     break;
                 case 3:
-                    runHousekeepingModule(loggedInStaff);
-
+                    housekeepingUI.run(loggedInStaff);
                     break;
                 case 4:
-                    displayUnavailableModule(
-                            "Front-Desk Service & Lookup", "Carret Chong Kar Loke");
-                    pause();
-                    break;
+//                    displayUnavailableModule(
+//                            "Front-Desk Service & Lookup", "Carret Chong Kar Loke");
+//                    pause();
+                      System.out.println("\n[INFO] Front-Desk Service module is temporarily disabled due to incomplete ADT implementation.");
+                      System.out.println("[NOTE] Please refer to Git commits and restore once BinarySearchTree is implemented.");
+                      pause();
+                      break;
                 case 5:
                     displayReportMenu();
                     break;
@@ -389,7 +393,7 @@ public class HotelSystemUI {
         long minimumWait = readNonNegativeLong(
                 "Minimum waiting mins (blank=0): ", 0);
         System.out.println("Sort Order: [1] Priority DESC  [2] Waiting Time DESC  [3] Guest ID ASC");
-        int sortChoice = readInt("Select Sort Order            : ", 1, 3);
+        int sortChoice = readInt("Select Sort Order             : ", 1, 3);
 
         VipReportController.QueueReportFilter filter
                 = new VipReportController.QueueReportFilter(
@@ -412,7 +416,7 @@ public class HotelSystemUI {
         String allocationStatus = readStatusFilter();
         System.out.println("Sort Order: [1] Allocation Time DESC  [2] Waiting Time DESC"
                 + "  [3] Loyalty Priority DESC");
-        int sortChoice = readInt("Select Sort Order            : ", 1, 3);
+        int sortChoice = readInt("Select Sort Order             : ", 1, 3);
 
         VipReportController.AllocationReportFilter filter
                 = new VipReportController.AllocationReportFilter(
@@ -486,228 +490,6 @@ public class HotelSystemUI {
             }
         }
         throw new IllegalArgumentException("Selection was not found.");
-    }
-
-    // ==============================
-    // HOUSEKEEPING MODULE
-    // (delegates all state and logic to control.HousekeepingController;
-    //  this class only handles console input/output)
-    // ==============================
-
-    // Runs the housekeeping module until the user returns to the main menu.
-    private void runHousekeepingModule(
-            AuthenticationController.LoginResult loggedInStaff) {
-
-        boolean moduleOpen = true;
-
-        while (moduleOpen) {
-
-            displayHousekeepingMenu(loggedInStaff);
-
-            int choice = readInt(
-                    "[COMMAND] > Select choice (0-4): ",
-                    0,
-                    4
-            );
-
-            System.out.println();
-
-            switch (choice) {
-
-                case 1:
-                    displayAllRoomStatuses();
-                    break;
-
-                case 2:
-                    assignCleaningTask();
-                    break;
-
-                case 3:
-                    updateRoomStatus();
-                    break;
-
-                case 4:
-                    rollbackLastTask();
-                    break;
-
-                case 0:
-                    moduleOpen = false;
-                    break;
-
-                default:
-                    throw new IllegalStateException(
-                            "Unexpected housekeeping menu choice.");
-            }
-
-            if (moduleOpen) {
-                pause();
-            }
-        }
-    }
-
-    // Displays the housekeeping menu, including the current undo/rollback stack size.
-    private void displayHousekeepingMenu(
-            AuthenticationController.LoginResult loggedInStaff) {
-
-        printDivider('=');
-        printCentered("[3] HOUSEKEEPING & TASK LOG");
-        printDivider('=');
-
-        System.out.println("LOGGED IN STAFF : "
-                + loggedInStaff.fullName()
-                + " (" + loggedInStaff.role() + ")");
-
-        System.out.println("STAFF ID        : "
-                + loggedInStaff.staffId());
-
-        System.out.println("ROLLBACK STACK  : "
-                + housekeepingController.getUndoStackSize()
-                + " task(s) available for undo (Custom ArrayStack ADT)");
-
-        printDivider('-');
-
-        System.out.println("  1. Display All Room Statuses");
-        System.out.println("  2. Assign Housekeeping Staff to Room");
-        System.out.println("  3. Update Room Cleaning Status");
-        System.out.println("  4. Rollback Last Status Change");
-        System.out.println("  0. Return to Main Menu");
-
-        printDivider('-');
-    }
-
-    // Displays a snapshot of every room's current housekeeping status.
-    private void displayAllRoomStatuses() {
-
-        System.out.println("--- ALL ROOM STATUSES ---");
-
-        HousekeepingController.RoomStatusView[] rooms
-                = housekeepingController.getAllRoomStatusesSnapshot();
-
-        if (rooms.length == 0) {
-            System.out.println("No room status records available.");
-            return;
-        }
-
-        System.out.printf(Locale.ROOT, "%-12s %-20s %-20s%n",
-                "Room No.", "Status", "Assigned Staff");
-        printDivider('-');
-
-        for (HousekeepingController.RoomStatusView room : rooms) {
-            System.out.printf(Locale.ROOT, "%-12s %-20s %-20s%n",
-                    room.roomNumber(), room.status(), room.assignedStaff());
-        }
-    }
-
-    // Reads a room number, fails fast if the room isn't tracked by housekeeping,
-    // and lets the user retry or bail out before any further input is collected.
-    // Returns the validated room number, or null if the user chose to stop.
-    private String readValidatedRoomNumber() {
-        while (true) {
-            String roomNumber = readRequiredText("Room Number       : ");
-            if (housekeepingController.findRecord(roomNumber) != null) {
-                return roomNumber;
-            }
-            System.out.println("[ERROR] Room " + roomNumber + " is not tracked by housekeeping.");
-            System.out.print("Would you like to try another room number? (Y/N): ");
-            String answer = readLine().trim().toUpperCase(Locale.ROOT);
-            if (!answer.equals("Y")) {
-                return null;
-            }
-        }
-    }
-
-    // Reads room and staff details and asks the control to assign a cleaning task.
-    private void assignCleaningTask() {
-
-        System.out.println("--- ASSIGN HOUSEKEEPING STAFF TO ROOM ---");
-
-        String roomNumber = readValidatedRoomNumber();
-        if (roomNumber == null) {
-            return;
-        }
-
-        String staffName = readRequiredText("Staff Name        : ");
-
-        HousekeepingController.TaskActionResult result
-                = housekeepingController.assignCleaningTask(roomNumber, staffName);
-
-        System.out.println();
-        if (!result.success()) {
-            System.out.println("[ERROR] " + result.message());
-            return;
-        }
-        System.out.println("[SUCCESS] " + result.message());
-        System.out.println("Room Number       : " + result.roomNumber());
-        System.out.println("Status            : " + result.newStatus());
-    }
-
-    // Reads a room number and new status and asks the control to update it,
-    // pushing the previous state onto the custom ArrayStack for later rollback.
-    private void updateRoomStatus() {
-
-        System.out.println("--- UPDATE ROOM CLEANING STATUS ---");
-
-        String roomNumber = readValidatedRoomNumber();
-        if (roomNumber == null) {
-            return;
-        }
-
-        HousekeepingController.StatusOption[] statusOptions
-                = housekeepingController.getUpdatableStatusOptions();
-
-        System.out.println("Select New Status :");
-        for (HousekeepingController.StatusOption option : statusOptions) {
-            System.out.printf(Locale.ROOT, "  [%d] %s%n",
-                    option.value(), option.label());
-        }
-        int statusChoice = readInt("New Status        : ", 1, statusOptions.length);
-
-        HousekeepingController.TaskActionResult result
-                = housekeepingController.updateRoomStatus(roomNumber, statusChoice);
-
-        System.out.println();
-        if (!result.success()) {
-            System.out.println("[ERROR] " + result.message());
-            return;
-        }
-        System.out.println("[SYSTEM] Previous status pushed onto rollback ArrayStack ADT.");
-        System.out.println("[SUCCESS] " + result.message());
-        System.out.println("Room Number       : " + result.roomNumber());
-        System.out.println("New Status        : " + result.newStatus());
-    }
-
-    // Pops the most recent task off the custom ArrayStack and reverts the room's status.
-    private void rollbackLastTask() {
-
-        System.out.println("--- ROLLBACK LAST STATUS CHANGE ---");
-
-        if (housekeepingController.getUndoStackSize() == 0) {
-            System.out.println("[ERROR] No housekeeping task available to rollback.");
-            return;
-        }
-
-        CleaningTask lastTask = housekeepingController.peekLastTask();
-        System.out.println("Last Task On Stack : Room " + lastTask.getRoomNumber()
-                + " -> " + lastTask.getNewStatus().getDisplayName());
-        System.out.print("Confirm rollback? (Y/N): ");
-        String confirm = readLine().trim().toUpperCase(Locale.ROOT);
-        if (!confirm.equals("Y")) {
-            System.out.println("[INFO] Rollback cancelled.");
-            return;
-        }
-
-        HousekeepingController.RollbackResult result
-                = housekeepingController.rollbackLastTask();
-
-        System.out.println();
-        if (!result.success()) {
-            System.out.println("[ERROR] " + result.message());
-            return;
-        }
-        System.out.println("[SYSTEM] Task popped from rollback ArrayStack ADT.");
-        System.out.println("[SUCCESS] " + result.message());
-        System.out.println("Room Number        : " + result.roomNumber());
-        System.out.println("Reverted Status     : " + result.revertedStatus());
     }
 
     // Reads text repeatedly until the user enters a non-empty value.

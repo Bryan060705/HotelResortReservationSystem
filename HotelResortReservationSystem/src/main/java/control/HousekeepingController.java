@@ -1,8 +1,6 @@
-/*
- * Author: Bong Xin Yee
- * Controls housekeeping operations, including room status,
- * staff assignment, and rollback history.
- */
+// Author: Bong Xin Yee
+// Main controller for the housekeeping module
+// Uses ArrayStack to handle the undo/rollback feature
 package control;
 
 import adt.ArrayStack;
@@ -19,20 +17,35 @@ import java.util.Objects;
 import utility.SearchAndSortUtility;
 
 public final class HousekeepingController {
+
     private static final int DEFAULT_CAPACITY = 10;
     private static final int FIRST_TASK_ID = 1042;
-    
-    // Sort records by cleaning status order, then room number
+
+    // Sort rooms by cleaning status first, then by room number
     private static final Comparator<HousekeepingRecord> STATUS_PRIORITY_COMPARATOR
-            = Comparator.comparingInt(
-                    (HousekeepingRecord record) -> record.getStatus().ordinal())
+            = Comparator.comparingInt((HousekeepingRecord record) -> record.getStatus().ordinal())
                     .thenComparing(HousekeepingRecord::getRoomNumber);
+
+    // Sort staff by the number of rooms they are handling
+    private static final Comparator<StaffWorkload> STAFF_WORKLOAD_COMPARATOR
+            = Comparator.comparingInt((StaffWorkload workload) -> workload.totalRoomsAssigned())
+                    .reversed()
+                    .thenComparing(StaffWorkload::staffName, String.CASE_INSENSITIVE_ORDER);
 
     private final HotelDataStore dataStore;
     private final Clock clock;
+
+    // Stack used to keep track of status changes for rollback
     private final StackInterface<CleaningTask> undoStack;
-    private HousekeepingRecord[] records;
-    private int recordCount;
+
+    // Store the current status of each room
+    private HousekeepingRecord[] roomRecords;
+    private int roomRecordCount;
+
+    // Keep a separate copy of all task logs for the reports
+    private CleaningTask[] auditHistory;
+    private int auditHistoryCount;
+
     private int nextTaskId;
 
     public HousekeepingController(HotelDataStore dataStore) {
@@ -40,203 +53,401 @@ public final class HousekeepingController {
     }
 
     HousekeepingController(HotelDataStore dataStore, Clock clock) {
-        this.dataStore = Objects.requireNonNull(
-                dataStore, "Shared hotel data is required.");
-        this.clock = Objects.requireNonNull(clock, "Clock is required.");
-        records = new HousekeepingRecord[DEFAULT_CAPACITY];
-        undoStack = new ArrayStack<>();
-        nextTaskId = FIRST_TASK_ID;
+        this.dataStore = Objects.requireNonNull(dataStore, "DataStore cannot be null");
+        this.clock = Objects.requireNonNull(clock, "Clock cannot be null");
+        this.roomRecords = new HousekeepingRecord[DEFAULT_CAPACITY];
+        this.roomRecordCount = 0;
+        this.auditHistory = new CleaningTask[DEFAULT_CAPACITY];
+        this.auditHistoryCount = 0;
+        this.undoStack = new ArrayStack<>();
+        this.nextTaskId = FIRST_TASK_ID;
         syncNewRooms();
     }
 
-    // Sync untracked rooms from the data store with default DIRTY status
+    // Add any new rooms from the shared data store
+    // New rooms start with DIRTY status
     private void syncNewRooms() {
         Room[] sharedRooms = dataStore.getRoomsSnapshot();
+
         for (Room room : sharedRooms) {
             if (findRecord(room.getRoomNumber()) == null) {
-                ensureCapacity();
-                records[recordCount++] = new HousekeepingRecord(
-                        room.getRoomNumber(), room.getRoomType(),
-                        CleaningStatus.DIRTY, now());
+                ensureRoomCapacity();
+
+                roomRecords[roomRecordCount++] = new HousekeepingRecord(
+                        room.getRoomNumber(),
+                        room.getRoomType(),
+                        CleaningStatus.DIRTY,
+                        now()
+                );
             }
         }
     }
 
-    // Find record by room number using linear search
+    // Find a room using its room number
     public HousekeepingRecord findRecord(String roomNumber) {
         if (roomNumber == null) {
             return null;
         }
-        for (int index = 0; index < recordCount; index++) {
-            if (records[index].getRoomNumber()
-                    .equalsIgnoreCase(roomNumber.trim())) {
-                return records[index];
+
+        for (int i = 0; i < roomRecordCount; i++) {
+            if (roomRecords[i].getRoomNumber().equalsIgnoreCase(roomNumber.trim())) {
+                return roomRecords[i];
             }
         }
+
         return null;
     }
 
-    // Get sorted room statuses snapshot for display
-    public RoomStatusView[] getAllRoomStatusesSnapshot() {
+    // Get a copy of all room records and sort them for display
+    public HousekeepingRecord[] getAllRecordsSnapshot() {
         syncNewRooms();
-        HousekeepingRecord[] copy = new HousekeepingRecord[recordCount];
-        System.arraycopy(records, 0, copy, 0, recordCount);
+
+        HousekeepingRecord[] copy = new HousekeepingRecord[roomRecordCount];
+        System.arraycopy(roomRecords, 0, copy, 0, roomRecordCount);
+
         SearchAndSortUtility.mergeSort(copy, STATUS_PRIORITY_COMPARATOR);
 
-        RoomStatusView[] views = new RoomStatusView[copy.length];
-        for (int index = 0; index < copy.length; index++) {
-            views[index] = toView(copy[index]);
+        return copy;
+    }
+
+    public RoomStatusView[] getAllRoomStatusesSnapshot() {
+        HousekeepingRecord[] sortedRecords = getAllRecordsSnapshot();
+        RoomStatusView[] views = new RoomStatusView[sortedRecords.length];
+
+        for (int i = 0; i < sortedRecords.length; i++) {
+            views[i] = toView(sortedRecords[i]);
         }
+
         return views;
     }
 
-    // Convert entity record to view DTO
+    // Get a copy of the audit history for the report
+    public CleaningTask[] getAuditHistorySnapshot() {
+        CleaningTask[] copy = new CleaningTask[auditHistoryCount];
+        System.arraycopy(auditHistory, 0, copy, 0, auditHistoryCount);
+
+        return copy;
+    }
+
     private RoomStatusView toView(HousekeepingRecord record) {
-        long turnaround = record.getTurnaroundMinutes();
-        String turnaroundText = turnaround < 0 ? "--" : turnaround + " mins";
-        return new RoomStatusView(record.getRoomNumber(),
+        String turnaroundText;
+
+        // Only show duration if assigned AND active cleaning has actually begun
+        if (!record.isAssigned() || record.getStatus() == CleaningStatus.DIRTY) {
+            turnaroundText = "--";
+        } else {
+            long turnaround = record.getTurnaroundMinutes();
+            if (turnaround < 0) {
+                turnaroundText = "--";
+            } else if (turnaround == 0) {
+                turnaroundText = "< 1 min";
+            } else {
+                turnaroundText = turnaround + " mins";
+            }
+        }
+
+        return new RoomStatusView(
+                record.getRoomNumber(),
                 record.getRoomType().getDisplayName(),
                 record.getStatus().getDisplayName(),
-                record.getAssignedStaff(), turnaroundText);
+                record.getAssignedStaff(),
+                turnaroundText
+        );
     }
 
-    // Assign a staff member to a room
+    // Assign a staff member to the selected room
     public TaskActionResult assignCleaningTask(String roomNumber, String staffName) {
         HousekeepingRecord record = findRecord(roomNumber);
+
         if (record == null) {
-            return new TaskActionResult(false,
+            return new TaskActionResult(
+                    false,
                     "Room " + roomNumber + " is not tracked by housekeeping.",
-                    roomNumber, staffName, null, null, -1, undoStack.size());
-        }
-        if (staffName == null || staffName.isBlank()) {
-            return new TaskActionResult(false, "Staff name is required.",
-                    roomNumber, staffName, record.getStatus().getDisplayName(),
-                    record.getStatus().getDisplayName(), -1, undoStack.size());
+                    roomNumber,
+                    staffName,
+                    null,
+                    null,
+                    -1,
+                    undoStack.size()
+            );
         }
 
-        record.assignStaff(staffName, now());
-        return new TaskActionResult(true,
-                "Room " + record.getRoomNumber() + " assigned to "
-                        + record.getAssignedStaff() + ".",
-                record.getRoomNumber(), record.getAssignedStaff(),
+        if (staffName == null || staffName.isBlank()) {
+            return new TaskActionResult(
+                    false,
+                    "Staff name is required.",
+                    roomNumber,
+                    staffName,
+                    record.getStatus().getDisplayName(),
+                    record.getStatus().getDisplayName(),
+                    -1,
+                    undoStack.size()
+            );
+        }
+
+        record.assignStaff(staffName.trim(), now());
+
+        return new TaskActionResult(
+                true,
+                "Room " + record.getRoomNumber() + " assigned to " + record.getAssignedStaff() + ".",
+                record.getRoomNumber(),
+                record.getAssignedStaff(),
                 record.getStatus().getDisplayName(),
-                record.getStatus().getDisplayName(), -1, undoStack.size());
+                record.getStatus().getDisplayName(),
+                -1,
+                undoStack.size()
+        );
     }
 
-    // Update status and push old state to undo stack
+    // Change the room status and save the change to the undo stack
     public TaskActionResult updateRoomStatus(String roomNumber, int statusMenuChoice) {
         HousekeepingRecord record = findRecord(roomNumber);
+
         if (record == null) {
-            return new TaskActionResult(false,
+            return new TaskActionResult(
+                    false,
                     "Room " + roomNumber + " is not tracked by housekeeping.",
-                    roomNumber, null, null, null, -1, undoStack.size());
+                    roomNumber,
+                    null,
+                    null,
+                    null,
+                    -1,
+                    undoStack.size()
+            );
         }
 
         CleaningStatus newStatus;
+
         try {
             newStatus = CleaningStatus.fromMenuChoice(statusMenuChoice);
-        } catch (IllegalArgumentException exception) {
-            return new TaskActionResult(false, exception.getMessage(),
-                    roomNumber, record.getAssignedStaff(),
-                    record.getStatus().getDisplayName(), null, -1,
-                    undoStack.size());
+        } catch (IllegalArgumentException ex) {
+            return new TaskActionResult(
+                    false,
+                    ex.getMessage(),
+                    roomNumber,
+                    record.getAssignedStaff(),
+                    record.getStatus().getDisplayName(),
+                    null,
+                    -1,
+                    undoStack.size()
+            );
+        }
+
+        // Avoid duplicate status update
+        if (record.getStatus() == newStatus) {
+            return new TaskActionResult(
+                    false,
+                    "Room " + roomNumber + " is already in status '" + newStatus.getDisplayName() + "'. No change made.",
+                    roomNumber,
+                    record.getAssignedStaff(),
+                    record.getStatus().getDisplayName(),
+                    null,
+                    -1,
+                    undoStack.size()
+            );
+        }
+
+        // Avoid updating already completed rooms via normal update
+        if (record.getStatus() == CleaningStatus.READY) {
+            return new TaskActionResult(
+                    false,
+                    "Room " + roomNumber + " is already READY. Use Rollback (Option 4) to revert.",
+                    roomNumber,
+                    record.getAssignedStaff(),
+                    record.getStatus().getDisplayName(),
+                    null,
+                    -1,
+                    undoStack.size()
+            );
         }
 
         CleaningStatus previousStatus = record.getStatus();
         LocalDateTime timestamp = now();
+
         record.changeStatus(newStatus, timestamp);
 
         int taskId = nextTaskId++;
-        CleaningTask task = new CleaningTask(taskId, record.getRoomNumber(),
-                record.getAssignedStaff(), previousStatus, newStatus, timestamp);
+
+        CleaningTask task = new CleaningTask(
+                taskId,
+                record.getRoomNumber(),
+                record.getAssignedStaff(),
+                previousStatus,
+                newStatus,
+                timestamp
+        );
+
+        // Save the change in the stack so the latest change can be undone first
         undoStack.push(task);
 
-        return new TaskActionResult(true,
-                "Room " + record.getRoomNumber() + " updated to '"
-                        + newStatus.getDisplayName() + "'.",
-                record.getRoomNumber(), record.getAssignedStaff(),
-                previousStatus.getDisplayName(), newStatus.getDisplayName(),
-                taskId, undoStack.size());
+        // Keep the same task in the audit history for reporting
+        ensureAuditCapacity();
+        auditHistory[auditHistoryCount++] = task;
+
+        return new TaskActionResult(
+                true,
+                "Room " + record.getRoomNumber()
+                        + " updated to '" + newStatus.getDisplayName() + "'.",
+                record.getRoomNumber(),
+                record.getAssignedStaff(),
+                previousStatus.getDisplayName(),
+                newStatus.getDisplayName(),
+                taskId,
+                undoStack.size()
+        );
     }
 
-    // Pop the latest task from the stack and revert status
+    // Remove the latest task from the stack and restore the previous status
     public RollbackResult rollbackLastTask() {
         if (undoStack.isEmpty()) {
-            return new RollbackResult(false,
+            return new RollbackResult(
+                    false,
                     "The rollback stack is empty; no task to undo.",
-                    -1, null, null, 0);
+                    -1,
+                    null,
+                    null,
+                    0
+            );
         }
 
+        
+        CleaningTask topTask = undoStack.peek();
+
+        // Check room availability
+        Room sharedRoom = dataStore.findRoom(topTask.getRoomNumber());
+        if (sharedRoom != null && sharedRoom.getStatus() == entity.RoomStatus.OCCUPIED) {
+            return new RollbackResult(
+                    false,
+                    "Integrity Violation: Room " + topTask.getRoomNumber()
+                            + " is already OCCUPIED by a checked-in guest. Rollback rejected.",
+                    topTask.getTaskId(),
+                    topTask.getRoomNumber(),
+                    null,
+                    undoStack.size()
+            );
+        }
+
+        
         CleaningTask task = undoStack.pop();
         HousekeepingRecord record = findRecord(task.getRoomNumber());
+
         if (record != null) {
             record.revertStatus(task.getPreviousStatus(), now());
         }
 
-        return new RollbackResult(true,
+        return new RollbackResult(
+                true,
                 "Rollback complete! Room " + task.getRoomNumber()
                         + " reverted to '"
-                        + task.getPreviousStatus().getDisplayName() + "'.",
-                task.getTaskId(), task.getRoomNumber(),
-                task.getPreviousStatus().getDisplayName(), undoStack.size());
+                        + task.getPreviousStatus().getDisplayName()
+                        + "'.",
+                task.getTaskId(),
+                task.getRoomNumber(),
+                task.getPreviousStatus().getDisplayName(),
+                undoStack.size()
+        );
     }
 
+    // Look at the latest task without removing it
     public CleaningTask peekLastTask() {
         return undoStack.isEmpty() ? null : undoStack.peek();
     }
 
+    // Return the number of tasks currently waiting to be undone
     public int getUndoStackSize() {
         return undoStack.size();
     }
+    
+    // Returns only valid forward transitions (excluding DIRTY, identical current status, and regression)
+    public StatusOption[] getAvailableStatusTransitions(CleaningStatus currentStatus) {
+        CleaningStatus[] allStatuses = CleaningStatus.values();
+        int count = 0;
+        for (CleaningStatus status : allStatuses) {
+            if (status != CleaningStatus.DIRTY && status != currentStatus) {
+                if (currentStatus == CleaningStatus.INSPECTED && status == CleaningStatus.CLEANING) {
+                    continue;
+                }
+                count++;
+            }
+        }
 
-    // Options for update menu (skip DIRTY)
+        StatusOption[] options = new StatusOption[count];
+        int index = 0;
+        for (CleaningStatus status : allStatuses) {
+            if (status != CleaningStatus.DIRTY && status != currentStatus) {
+                if (currentStatus == CleaningStatus.INSPECTED && status == CleaningStatus.CLEANING) {
+                    continue;
+                }
+                options[index++] = new StatusOption(
+                        status.getMenuChoice(),
+                        status.getMenuLabel()
+                );
+            }
+        }
+
+        return options;
+    }
+
+    // Get the status options that can be selected
+    // DIRTY is left out because it is the starting status
     public StatusOption[] getUpdatableStatusOptions() {
         CleaningStatus[] values = CleaningStatus.values();
         StatusOption[] options = new StatusOption[values.length - 1];
+
         int index = 0;
+
         for (CleaningStatus status : values) {
             if (status == CleaningStatus.DIRTY) {
                 continue;
             }
+
             options[index++] = new StatusOption(
-                    status.getMenuChoice(), status.getMenuLabel());
+                    status.getMenuChoice(),
+                    status.getMenuLabel()
+            );
         }
+
         return options;
     }
+    
+    // Registered duty staff
+    private static final String[] DUTY_STAFF = {
+        "Bong Xin Yee",
+        "Tang Hong Yi",
+        "Bryan Won Chu Ming",
+        "Carret Chong Kar Loke",
+        "Siti Aminah",
+        "Muhammad Faiz",
+        "Kavitha Rajan"
+    };
 
-    // Sort staff by total rooms assigned descending, then alphabetically by name
-    private static final Comparator<StaffWorkload> STAFF_WORKLOAD_COMPARATOR
-            = Comparator.comparingInt(
-                    (StaffWorkload workload) -> workload.totalRoomsAssigned())
-                    .reversed()
-                    .thenComparing(StaffWorkload::staffName,
-                            String.CASE_INSENSITIVE_ORDER);
+    public String[] getDutyStaff() {
+        String[] copy = new String[DUTY_STAFF.length];
+        System.arraycopy(DUTY_STAFF, 0, copy, 0, DUTY_STAFF.length);
+        return copy;
+    }
 
-    // Calculate room counts, workload breakdown, and turnaround metrics
+    // Calculate the room and staff information needed for the summary report
     public HousekeepingSummaryReport generateSummaryReport() {
         syncNewRooms();
 
         int statusValueCount = CleaningStatus.values().length;
         int[] countsByStatusOrdinal = new int[statusValueCount];
 
-        // Parallel arrays to tally workload per staff member
-        String[] staffNames = new String[Math.max(recordCount, 1)];
-        int[] staffTotalRooms = new int[Math.max(recordCount, 1)];
-        int[] staffInProgressRooms = new int[Math.max(recordCount, 1)];
-        int[] staffCompletedRooms = new int[Math.max(recordCount, 1)];
-        int staffTally = 0;
+        String[] staffNames = new String[Math.max(roomRecordCount, 1)];
+        int[] staffTotalRooms = new int[Math.max(roomRecordCount, 1)];
+        int[] staffInProgressRooms = new int[Math.max(roomRecordCount, 1)];
+        int[] staffCompletedRooms = new int[Math.max(roomRecordCount, 1)];
 
+        int staffTally = 0;
         int unassignedRooms = 0;
         long turnaroundSumMinutes = 0;
         int turnaroundSampleCount = 0;
 
-        for (int index = 0; index < recordCount; index++) {
-            HousekeepingRecord record = records[index];
-            if (record == null) {
-                continue;
-            }
-
+        for (int i = 0; i < roomRecordCount; i++) {
+            HousekeepingRecord record = roomRecords[i];
             CleaningStatus status = record.getStatus();
+
             if (status != null) {
                 countsByStatusOrdinal[status.ordinal()]++;
             }
@@ -247,29 +458,34 @@ public final class HousekeepingController {
             }
 
             long turnaround = record.getTurnaroundMinutes();
+
             if (turnaround >= 0) {
                 turnaroundSumMinutes += turnaround;
                 turnaroundSampleCount++;
             }
 
             String staffName = record.getAssignedStaff();
+
             if (staffName == null || staffName.isBlank()) {
                 continue;
             }
 
             int staffIndex = -1;
+
             for (int existing = 0; existing < staffTally; existing++) {
                 if (staffNames[existing].equalsIgnoreCase(staffName)) {
                     staffIndex = existing;
                     break;
                 }
             }
+
             if (staffIndex == -1) {
                 staffIndex = staffTally++;
                 staffNames[staffIndex] = staffName;
             }
 
             staffTotalRooms[staffIndex]++;
+
             if (status == CleaningStatus.READY) {
                 staffCompletedRooms[staffIndex]++;
             } else {
@@ -277,121 +493,162 @@ public final class HousekeepingController {
             }
         }
 
+        // Calculate the percentage for each cleaning status
         StatusCount[] statusBreakdown = new StatusCount[statusValueCount];
+
         for (CleaningStatus status : CleaningStatus.values()) {
             int count = countsByStatusOrdinal[status.ordinal()];
-            double percentage = recordCount == 0
-                    ? 0.0 : (count * 100.0) / recordCount;
-            statusBreakdown[status.ordinal()]
-                    = new StatusCount(status.getDisplayName(), count, percentage);
+
+            double percentage = roomRecordCount == 0
+                    ? 0.0
+                    : (count * 100.0) / roomRecordCount;
+
+            statusBreakdown[status.ordinal()] = new StatusCount(
+                    status.getDisplayName(),
+                    count,
+                    percentage
+            );
         }
 
+        // Prepare the workload information for each staff member
         StaffWorkload[] staffWorkload = new StaffWorkload[staffTally];
+
         for (int index = 0; index < staffTally; index++) {
-            staffWorkload[index] = new StaffWorkload(staffNames[index],
-                    staffTotalRooms[index], staffInProgressRooms[index],
-                    staffCompletedRooms[index]);
+            staffWorkload[index] = new StaffWorkload(
+                    staffNames[index],
+                    staffTotalRooms[index],
+                    staffInProgressRooms[index],
+                    staffCompletedRooms[index]
+            );
         }
-        SearchAndSortUtility.mergeSort(staffWorkload, STAFF_WORKLOAD_COMPARATOR);
+
+        SearchAndSortUtility.mergeSort(
+                staffWorkload,
+                STAFF_WORKLOAD_COMPARATOR
+        );
 
         String busiestStaffName = staffWorkload.length == 0
-                ? "N/A" : staffWorkload[0].staffName();
+                ? "N/A"
+                : staffWorkload[0].staffName();
+
         int busiestStaffRoomCount = staffWorkload.length == 0
-                ? 0 : staffWorkload[0].totalRoomsAssigned();
+                ? 0
+                : staffWorkload[0].totalRoomsAssigned();
 
         double averageTurnaroundMinutes = turnaroundSampleCount == 0
-                ? 0.0 : (double) turnaroundSumMinutes / turnaroundSampleCount;
+                ? 0.0
+                : (double) turnaroundSumMinutes / turnaroundSampleCount;
 
-        return new HousekeepingSummaryReport(now(), recordCount, statusBreakdown,
-                unassignedRooms, recordCount - unassignedRooms, staffWorkload,
-                busiestStaffName, busiestStaffRoomCount,
-                averageTurnaroundMinutes, undoStack.size());
+        return new HousekeepingSummaryReport(
+                now(),
+                roomRecordCount,
+                statusBreakdown,
+                unassignedRooms,
+                roomRecordCount - unassignedRooms,
+                staffWorkload,
+                busiestStaffName,
+                busiestStaffRoomCount,
+                averageTurnaroundMinutes,
+                undoStack.size()
+        );
+    }
+
+    // Increase the room array size when there is no more space
+    private void ensureRoomCapacity() {
+        if (roomRecordCount == roomRecords.length) {
+            HousekeepingRecord[] expanded =
+                    new HousekeepingRecord[roomRecords.length * 2];
+
+            System.arraycopy(
+                    roomRecords,
+                    0,
+                    expanded,
+                    0,
+                    roomRecords.length
+            );
+
+            roomRecords = expanded;
+        }
+    }
+
+    // Increase the audit log array size when there is no more space
+    private void ensureAuditCapacity() {
+        if (auditHistoryCount == auditHistory.length) {
+            CleaningTask[] expanded =
+                    new CleaningTask[auditHistory.length * 2];
+
+            System.arraycopy(
+                    auditHistory,
+                    0,
+                    expanded,
+                    0,
+                    auditHistory.length
+            );
+
+            auditHistory = expanded;
+        }
     }
 
     private LocalDateTime now() {
         return LocalDateTime.now(clock);
     }
 
-    // Expand records array by doubling its capacity
-    private void ensureCapacity() {
-        if (recordCount == records.length) {
-            HousekeepingRecord[] expanded
-                    = new HousekeepingRecord[records.length * 2];
-            System.arraycopy(records, 0, expanded, 0, records.length);
-            records = expanded;
-        }
-    }
+    public record RoomStatusView(
+            String roomNumber,
+            String roomType,
+            String status,
+            String assignedStaff,
+            String turnaround
+    ) {}
 
-    public record RoomStatusView(String roomNumber, String roomType,
-            String status, String assignedStaff, String turnaround) {
-    }
+    public record TaskActionResult(
+            boolean success,
+            String message,
+            String roomNumber,
+            String staffName,
+            String previousStatus,
+            String newStatus,
+            int taskId,
+            int undoStackSize
+    ) {}
 
-    public record TaskActionResult(boolean success, String message,
-            String roomNumber, String staffName, String previousStatus,
-            String newStatus, int taskId, int undoStackSize) {
-    }
+    public record RollbackResult(
+            boolean success,
+            String message,
+            int taskId,
+            String roomNumber,
+            String revertedStatus,
+            int remainingStackSize
+    ) {}
 
-    public record RollbackResult(boolean success, String message, int taskId,
-            String roomNumber, String revertedStatus, int remainingStackSize) {
-    }
+    public record StatusOption(
+            int value,
+            String label
+    ) {}
 
-    public record StatusOption(int value, String label) {
-    }
+    public record StatusCount(
+            String statusLabel,
+            int roomCount,
+            double percentageOfTotal
+    ) {}
 
-    public record StatusCount(String statusLabel, int roomCount,
-            double percentageOfTotal) {
-        public StatusCount {
-            statusLabel = statusLabel == null ? "Unknown" : statusLabel;
-            roomCount = Math.max(0, roomCount);
-            percentageOfTotal = Double.isFinite(percentageOfTotal)
-                    ? Math.max(0.0, percentageOfTotal) : 0.0;
-        }
-    }
+    public record StaffWorkload(
+            String staffName,
+            int totalRoomsAssigned,
+            int roomsInProgress,
+            int roomsCompleted
+    ) {}
 
-    public record StaffWorkload(String staffName, int totalRoomsAssigned,
-            int roomsInProgress, int roomsCompleted) {
-        public StaffWorkload {
-            staffName = (staffName == null || staffName.isBlank())
-                    ? "Unassigned" : staffName.trim();
-            totalRoomsAssigned = Math.max(0, totalRoomsAssigned);
-            roomsInProgress = Math.max(0, roomsInProgress);
-            roomsCompleted = Math.max(0, roomsCompleted);
-        }
-    }
-
-    public record HousekeepingSummaryReport(LocalDateTime generatedAt,
-            int totalRoomsTracked, StatusCount[] statusBreakdown,
-            int unassignedRooms, int assignedRooms,
-            StaffWorkload[] staffWorkload, String busiestStaffName,
-            int busiestStaffRoomCount, double averageTurnaroundMinutes,
-            int pendingRollbackTasks) {
-
-        public HousekeepingSummaryReport {
-            generatedAt = generatedAt == null ? LocalDateTime.now() : generatedAt;
-            totalRoomsTracked = Math.max(0, totalRoomsTracked);
-            statusBreakdown = statusBreakdown == null
-                    ? new StatusCount[0] : statusBreakdown.clone();
-            unassignedRooms = Math.max(0, unassignedRooms);
-            assignedRooms = Math.max(0, assignedRooms);
-            staffWorkload = staffWorkload == null
-                    ? new StaffWorkload[0] : staffWorkload.clone();
-            busiestStaffName = (busiestStaffName == null || busiestStaffName.isBlank())
-                    ? "N/A" : busiestStaffName;
-            busiestStaffRoomCount = Math.max(0, busiestStaffRoomCount);
-            averageTurnaroundMinutes = Double.isFinite(averageTurnaroundMinutes)
-                    ? Math.max(0.0, averageTurnaroundMinutes) : 0.0;
-            pendingRollbackTasks = Math.max(0, pendingRollbackTasks);
-        }
-
-        // Return defensive copies of arrays to maintain immutability
-        @Override
-        public StatusCount[] statusBreakdown() {
-            return statusBreakdown.clone();
-        }
-
-        @Override
-        public StaffWorkload[] staffWorkload() {
-            return staffWorkload.clone();
-        }
-    }
+    public record HousekeepingSummaryReport(
+            LocalDateTime generatedAt,
+            int totalRoomsTracked,
+            StatusCount[] statusBreakdown,
+            int unassignedRooms,
+            int assignedRooms,
+            StaffWorkload[] staffWorkload,
+            String busiestStaffName,
+            int busiestStaffRoomCount,
+            double averageTurnaroundMinutes,
+            int pendingRollbackTasks
+    ) {}
 }

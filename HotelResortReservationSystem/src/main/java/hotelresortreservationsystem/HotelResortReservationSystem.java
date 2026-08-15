@@ -4,14 +4,16 @@
  */
 package hotelresortreservationsystem;
 
+import boundary.BookingUI;
 import boundary.HotelSystemUI;
+import boundary.HousekeepingUI;
 import control.AuthenticationController;
+import control.BookingControl;
 import control.HousekeepingController;
+import control.HousekeepingReportController;
 import control.VipReportController;
 import control.VipRoomAllocationController;
 import entity.HotelDataStore;
-import boundary.BookingUI;
-import control.BookingControl;
 import java.util.Scanner;
 
 public class HotelResortReservationSystem {
@@ -21,21 +23,32 @@ public class HotelResortReservationSystem {
         AuthenticationController authenticationController
                 = new AuthenticationController();
         HotelDataStore sharedHotelData = new HotelDataStore();
+        
         VipRoomAllocationController allocationController
                 = new VipRoomAllocationController(sharedHotelData);
         VipReportController reportController
                 = new VipReportController(allocationController);
+                
         HousekeepingController housekeepingController
                 = new HousekeepingController(sharedHotelData);
+        HousekeepingReportController housekeepingReportController
+                = new HousekeepingReportController(housekeepingController);
+                
         BookingControl bookingControl
                 = new BookingControl(sharedHotelData);
+
         try (Scanner scanner = new Scanner(System.in)) {
-                    BookingUI bookingUI
-                = new BookingUI(bookingControl, scanner);
-            
+            BookingUI bookingUI
+                    = new BookingUI(bookingControl, scanner);
+
+            HousekeepingUI housekeepingUI
+                    = new HousekeepingUI(housekeepingController, housekeepingReportController, scanner);
+
             HotelSystemUI userInterface = new HotelSystemUI(
                     authenticationController, allocationController,
-                    reportController, housekeepingController,bookingUI, scanner);
+                    reportController, housekeepingController,
+                    bookingUI, housekeepingUI, scanner);
+
             userInterface.run();
         }
     }
