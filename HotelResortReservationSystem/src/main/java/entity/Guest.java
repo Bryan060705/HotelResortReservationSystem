@@ -92,6 +92,11 @@ public class Guest {
     }
 
     @Override
+    public int compareTo(Guest other) {
+        return this.guestID.compareTo(other.guestID);
+    }
+    
+    @Override
     public String toString() {
         return String.format(
                 "Guest ID: %s\n"
