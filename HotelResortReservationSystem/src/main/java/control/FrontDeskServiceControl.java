@@ -1,522 +1,343 @@
+package control;
+
 /*
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
  */
 
-package boundary;
-
-import control.FrontDeskServiceControl;
+import adt.BinarySearchTree;
 import entity.Guest;
 import entity.Room;
+import entity.RoomStatus;
 import entity.RoomType;
 import entity.HotelDataStore;
 
 
 import java.time.LocalDateTime;
-import java.util.Scanner;
 
 /**
- * Boundary class for the Front-Desk Service module.
+ * Controls the business logic of the Front-Desk Service module.
  *
- * Handles all console interaction with the front-desk agent.
+ * The module uses a Binary Search Tree to efficiently search
+ * guest records by their 8-digit confirmation number.
  */
-public class FrontDeskServiceBoundary {
+public class FrontDeskServiceControl {
 
-    private final FrontDeskServiceControl control;
-    private final Scanner scanner;
+    private final BinarySearchTree<Guest> guestTree;
+
+    private final  HotelDataStore hotelDataStore;
 
     /**
-     * Creates the Front-Desk Service boundary.
+     * Creates a Front-Desk Service controller.
      */
-    public FrontDeskServiceBoundary(HotelDataStore hotelDataStore) {
-    control = new FrontDeskServiceControl(hotelDataStore);
-    scanner = new Scanner(System.in);
+    public FrontDeskServiceControl(HotelDataStore hotelDataStore) {
+
+    if (hotelDataStore == null) {
+        throw new IllegalArgumentException(
+                "Hotel data store is required.");
+    }
+
+    this.hotelDataStore = hotelDataStore;
+    guestTree = new BinarySearchTree<>();
+    loadSampleGuests();
 }
 
     /**
-     * Starts the Front-Desk Service menu.
+     * Adds a guest into the Binary Search Tree.
+     *
+     * @param guest guest record
      */
-    public void run() {
+    public void addGuest(Guest guest) {
 
-        boolean running = true;
-
-        while (running) {
-
-            displayMenu();
-
-            int choice = readInteger("Enter your choice: ");
-
-            System.out.println();
-
-            try {
-
-                switch (choice) {
-
-                    case 1:
-                        addGuest();
-                        break;
-
-                    case 2:
-                        searchGuest();
-                        break;
-
-                    case 3:
-                        checkRoomAvailability();
-                        break;
-
-                    case 4:
-                        viewBilling();
-                        break;
-
-                    case 5:
-                        displayAllGuests();
-                        break;
-
-                    case 6:
-                        updateGuestStatus();
-                        break;
-
-                    case 7:
-                        deleteGuest();
-                        break;
-
-                    case 0:
-                        running = false;
-                        System.out.println(
-                                "Returning to the main system...");
-                        break;
-
-                    default:
-                        System.out.println(
-                                "Invalid option. Please try again.");
-                }
-
-            } catch (IllegalArgumentException
-                    | IllegalStateException exception) {
-
-                System.out.println(
-                        "Error: " + exception.getMessage());
-            }
-
-            if (running) {
-                System.out.println();
-                System.out.println(
-                        "Press ENTER to continue...");
-                scanner.nextLine();
-            }
+        if (guest == null) {
+            throw new IllegalArgumentException("Guest cannot be null.");
         }
+
+        validateConfirmationNumber(guest.getGuestID());
+
+        guestTree.insert(guest);
     }
 
     /**
-     * Displays the Front-Desk Service menu.
+     * Searches for a guest using the unique 8-digit
+     * confirmation number.
+     *
+     * @param confirmationNumber guest confirmation number
+     * @return guest information if found, otherwise null
      */
-    private void displayMenu() {
+    public Guest searchGuest(String confirmationNumber) {
 
-        System.out.println();
-        System.out.println("======================================");
-        System.out.println("       TWIN JETS RESORT");
-        System.out.println("       FRONT-DESK SERVICE");
-        System.out.println("======================================");
-        System.out.println("1. Register Guest");
-        System.out.println("2. Search Guest");
-        System.out.println("3. Check Room Availability");
-        System.out.println("4. View Billing Details");
-        System.out.println("5. Display All Guests");
-        System.out.println("6. Update Guest Status");
-        System.out.println("7. Delete Guest");
-        System.out.println("0. Return to Main Menu");
-        System.out.println("======================================");
-    }
+        validateConfirmationNumber(confirmationNumber);
 
-    /**
-     * Registers a new guest.
-     */
-    private void addGuest() {
-
-        System.out.println("========== REGISTER GUEST ==========");
-
-        String confirmationNumber = readConfirmationNumber();
-
-        if (control.searchGuest(confirmationNumber) != null) {
-            System.out.println(
-                    "A guest with this confirmation number already exists.");
-            return;
-        }
-
-        String name = readText("Guest name: ");
-        String phone = readText("Phone number: ");
-
-        System.out.println();
-        System.out.println("Room Type:");
-        System.out.println("1. Standard Suite");
-        System.out.println("2. Deluxe Suite");
-        System.out.println("3. Executive Villa");
-        System.out.println("4. Ocean Villa");
-
-        int roomChoice = readInteger("Select room type: ");
-
-        RoomType roomType = RoomType.fromMenuChoice(roomChoice);
-
-        String status = readText(
-                "Booking status (Confirmed/Pending/Checked-In): ");
-
-        String roomNumber = readText("Room number: ");
-
-        Guest guest = new Guest(
+        Guest searchKey = new Guest(
                 confirmationNumber,
-                name,
-                phone,
+                "",
+                "",
                 LocalDateTime.now(),
-                roomType.getDisplayName(),
-                status,
-                roomNumber
+                "",
+                "",
+                ""
         );
 
-        control.addGuest(guest);
-
-        System.out.println();
-        System.out.println(
-                "Guest registered successfully.");
+        return guestTree.search(searchKey);
     }
 
     /**
-     * Searches for a guest using the confirmation number.
+     * Deletes a guest using the confirmation number.
+     *
+     * @param confirmationNumber confirmation number
+     * @return true if deleted
      */
-    private void searchGuest() {
+    public boolean deleteGuest(String confirmationNumber) {
 
-        System.out.println("========== SEARCH GUEST ==========");
+        validateConfirmationNumber(confirmationNumber);
 
-        String confirmationNumber = readConfirmationNumber();
-
-        long startTime = System.nanoTime();
-
-        Guest guest = control.searchGuest(confirmationNumber);
-
-        long endTime = System.nanoTime();
+        Guest guest = searchGuest(confirmationNumber);
 
         if (guest == null) {
-
-            System.out.println();
-            System.out.println(
-                    "Guest not found.");
-
-        } else {
-
-            System.out.println();
-            System.out.println("Guest found!");
-            System.out.println("--------------------------------------");
-            System.out.println(guest);
-            System.out.println("--------------------------------------");
+            return false;
         }
 
-        System.out.printf(
-                "BST search time: %d ns%n",
-                endTime - startTime
+        return guestTree.delete(guest);
+    }
+
+    /**
+     * Returns all guests in confirmation-number order.
+     *
+     * @return guest array
+     */
+    public Guest[] getAllGuests() {
+
+        Object[] objects = guestTree.inOrder();
+
+        Guest[] guests = new Guest[objects.length];
+
+        for (int i = 0; i < objects.length; i++) {
+            guests[i] = (Guest) objects[i];
+        }
+
+        return guests;
+    }
+
+    /**
+     * Searches rooms by room type.
+     *
+     * @param roomType requested room type
+     * @return available rooms
+     */
+    public Room[] searchAvailableRooms(RoomType roomType) {
+
+    if (roomType == null) {
+        throw new IllegalArgumentException(
+                "Room type is required.");
+    }
+
+    Room[] allRooms = hotelDataStore.getRoomsSnapshot();
+
+    int count = 0;
+
+    for (Room room : allRooms) {
+        if (room.getRoomType() == roomType
+                && room.getStatus() == RoomStatus.AVAILABLE) {
+            count++;
+        }
+    }
+
+    Room[] availableRooms = new Room[count];
+
+    int index = 0;
+
+    for (Room room : allRooms) {
+        if (room.getRoomType() == roomType
+                && room.getStatus() == RoomStatus.AVAILABLE) {
+
+            availableRooms[index++] = room;
+        }
+    }
+
+    return availableRooms;
+}
+
+    /**
+     * Returns all rooms.
+     *
+     * @return room array
+     */
+    public Room[] getAllRooms() {
+    return hotelDataStore.getRoomsSnapshot();
+}
+
+    /**
+     * Generates billing information for a guest.
+     *
+     * The room rate is determined by the guest's room type.
+     *
+     * @param confirmationNumber guest confirmation number
+     * @return billing information
+     */
+    public String getBillingDetails(String confirmationNumber) {
+
+        Guest guest = searchGuest(confirmationNumber);
+
+        if (guest == null) {
+            return "Guest not found.";
+        }
+
+        double roomRate = getRoomRate(guest.getRoomType());
+
+        String paymentStatus = getPaymentStatus(guest);
+
+        return String.format(
+                "========== BILLING DETAILS ==========%n"
+                + "Confirmation No. : %s%n"
+                + "Guest Name       : %s%n"
+                + "Room Type        : %s%n"
+                + "Room Number      : %s%n"
+                + "Estimated Rate   : RM %.2f per night%n"
+                + "Booking Status   : %s%n"
+                + "Payment Status   : %s%n"
+                + "======================================",
+                guest.getGuestID(),
+                guest.getGuestName(),
+                guest.getRoomType(),
+                guest.getRoomNumber(),
+                roomRate,
+                guest.getStatus(),
+                paymentStatus
         );
     }
 
     /**
-     * Checks available rooms according to room type.
-     */
-    private void checkRoomAvailability() {
-
-        System.out.println(
-                "========== ROOM AVAILABILITY ==========");
-
-        System.out.println("1. Standard Suite");
-        System.out.println("2. Deluxe Suite");
-        System.out.println("3. Executive Villa");
-        System.out.println("4. Ocean Villa");
-
-        int choice = readInteger("Select room type: ");
-
-        RoomType roomType = RoomType.fromMenuChoice(choice);
-
-        Room[] availableRooms =
-                control.searchAvailableRooms(roomType);
-
-        System.out.println();
-
-        if (availableRooms.length == 0) {
-
-            System.out.println(
-                    "No available rooms for "
-                    + roomType.getDisplayName() + ".");
-
-            return;
-        }
-
-        System.out.println(
-                "Available " + roomType.getDisplayName() + " rooms:");
-
-        System.out.println("--------------------------------------");
-
-        for (Room room : availableRooms) {
-            System.out.println(
-                    "Room " + room.getRoomNumber()
-                    + " - " + room.getStatus().getDisplayName());
-        }
-
-        System.out.println("--------------------------------------");
-        System.out.println(
-                "Total available rooms: "
-                + availableRooms.length);
-    }
-
-    /**
-     * Displays billing information for a guest.
-     */
-    private void viewBilling() {
-
-        System.out.println(
-                "========== BILLING DETAILS ==========");
-
-        String confirmationNumber = readConfirmationNumber();
-
-        System.out.println();
-
-        System.out.println(
-                control.getBillingDetails(confirmationNumber));
-    }
-
-    /**
-     * Displays all guests using BST in-order traversal.
-     */
-    private void displayAllGuests() {
-
-        System.out.println(
-                "========== ALL GUESTS ==========");
-
-        Guest[] guests = control.getAllGuests();
-
-        if (guests.length == 0) {
-
-            System.out.println(
-                    "No guest records found.");
-
-            return;
-        }
-
-        System.out.println(
-                "Guests are displayed in confirmation-number order.");
-
-        System.out.println();
-
-        for (Guest guest : guests) {
-
-            System.out.println("--------------------------------------");
-            System.out.println(
-                    "Confirmation No.: "
-                    + guest.getGuestID());
-
-            System.out.println(
-                    "Name            : "
-                    + guest.getGuestName());
-
-            System.out.println(
-                    "Room            : "
-                    + guest.getRoomNumber());
-
-            System.out.println(
-                    "Room Type       : "
-                    + guest.getRoomType());
-
-            System.out.println(
-                    "Status          : "
-                    + guest.getStatus());
-        }
-
-        System.out.println("--------------------------------------");
-        System.out.println(
-                "Total guests: " + guests.length);
-    }
-
-    /**
-     * Updates the status of an existing guest.
+     * Returns the number of guests currently stored.
      *
-     * The front-desk agent can update the guest status
-     * to Pending, Confirmed, Checked-In, or Checked-Out.
+     * @return guest count
      */
-    private void updateGuestStatus() {
-
-        System.out.println(
-                "========== UPDATE GUEST STATUS ==========");
-
-        String confirmationNumber = readConfirmationNumber();
-
-        Guest guest = control.searchGuest(confirmationNumber);
-
-        if (guest == null) {
-
-            System.out.println(
-                    "Guest not found.");
-
-            return;
-        }
-        
-        System.out.println();
-        System.out.println("Guest found!");
-        System.out.println("--------------------------------------");
-        System.out.println("Guest Name : " + guest.getGuestName());
-        System.out.println("Room       : " + guest.getRoomNumber());
-        System.out.println("Current Status : " + guest.getStatus());
-        System.out.println("--------------------------------------");
-
-        System.out.println("Select new status:");
-        System.out.println("1. Pending");
-        System.out.println("2. Confirmed");
-        System.out.println("3. Checked-In");
-        System.out.println("4. Checked-Out");
-
-        int choice = readInteger("Enter status choice: ");
-
-        String newStatus;
-
-        switch (choice) {
-                case 1:
-                    newStatus = "Pending";
-                    break;
-
-                case 2:
-                    newStatus = "Confirmed";
-                    break;
-
-                case 3:
-                    newStatus = "Checked-In";
-                    break;
-
-                case 4:
-                    newStatus = "Checked-Out";
-                    break;
-
-                default:
-                    System.out.println(
-                        "Invalid status choice.");
-                    return;
-        }    
-        guest.setStatus(newStatus);
-
-        System.out.println();
-        System.out.println(
-                "Guest status updated successfully.");
-        System.out.println(
-                "New Status: " + guest.getStatus());
-    }
-    
-    /**
-     * Deletes a guest record.
-     */
-    private void deleteGuest() {
-
-        System.out.println(
-                "========== DELETE GUEST ==========");
-
-        String confirmationNumber = readConfirmationNumber();
-
-        Guest guest = control.searchGuest(confirmationNumber);
-
-        if (guest == null) {
-
-            System.out.println(
-                    "Guest not found.");
-
-            return;
-        }
-
-        System.out.println(
-                "Guest found: " + guest.getGuestName());
-
-        String confirmation = readText(
-                "Enter YES to confirm deletion: ");
-
-        if (confirmation.equalsIgnoreCase("YES")) {
-
-            boolean deleted =
-                    control.deleteGuest(confirmationNumber);
-
-            if (deleted) {
-                System.out.println(
-                        "Guest deleted successfully.");
-            } else {
-                System.out.println(
-                        "Unable to delete guest.");
-            }
-
-        } else {
-
-            System.out.println(
-                    "Deletion cancelled.");
-        }
+    public int getGuestCount() {
+        return guestTree.size();
     }
 
     /**
-     * Reads and validates an 8-digit confirmation number.
+     * Validates that the confirmation number contains exactly
+     * eight numeric digits.
      *
-     * @return valid confirmation number
+     * @param confirmationNumber confirmation number
      */
-    private String readConfirmationNumber() {
+    private void validateConfirmationNumber(String confirmationNumber) {
 
-        while (true) {
+        if (confirmationNumber == null
+                || !confirmationNumber.matches("\\d{8}")) {
 
-            String value =
-                    readText("8-digit confirmation number: ");
-
-            if (value.matches("\\d{8}")) {
-                return value;
-            }
-
-            System.out.println(
-                    "Invalid confirmation number.");
-            System.out.println(
-                    "It must contain exactly 8 digits.");
+            throw new IllegalArgumentException(
+                    "Confirmation number must contain exactly 8 digits.");
         }
     }
 
     /**
-     * Reads a non-empty text value.
+     * Returns a sample room rate.
      *
-     * @param message prompt
-     * @return entered text
+     * @param roomType room type
+     * @return nightly rate
      */
-    private String readText(String message) {
+    private double getRoomRate(String roomType) {
 
-        while (true) {
-
-            System.out.print(message);
-
-            String value = scanner.nextLine().trim();
-
-            if (!value.isEmpty()) {
-                return value;
-            }
-
-            System.out.println(
-                    "This field cannot be empty.");
+        if (roomType == null) {
+            return 0.00;
         }
+
+        if (roomType.equalsIgnoreCase("Standard Suite")) {
+            return 250.00;
+        }
+
+        if (roomType.equalsIgnoreCase("Deluxe Suite")) {
+            return 380.00;
+        }
+
+        if (roomType.equalsIgnoreCase("Executive Villa")) {
+            return 550.00;
+        }
+
+        if (roomType.equalsIgnoreCase("Ocean Villa")) {
+            return 750.00;
+        }
+
+        return 0.00;
     }
 
     /**
-     * Reads an integer from console input.
+     * Determines a simple payment status from the guest booking status.
      *
-     * @param message prompt
-     * @return integer
+     * @param guest guest record
+     * @return payment status
      */
-    private int readInteger(String message) {
+    private String getPaymentStatus(Guest guest) {
 
-        while (true) {
-
-            System.out.print(message);
-
-            String input = scanner.nextLine().trim();
-
-            try {
-
-                return Integer.parseInt(input);
-
-            } catch (NumberFormatException exception) {
-
-                System.out.println(
-                        "Please enter a valid number.");
-            }
+        if (guest.getStatus() == null) {
+            return "Pending";
         }
+
+        if (guest.getStatus().equalsIgnoreCase("Confirmed")
+                || guest.getStatus().equalsIgnoreCase("Checked-In")) {
+
+            return "Paid";
+        }
+
+        return "Pending";
+    }
+
+    /**
+     * Loads sample guests so the Front-Desk Service can be
+     * demonstrated immediately.
+     */
+    private void loadSampleGuests() {
+
+        addGuest(new Guest(
+                "58210473",
+                "John Tan",
+                "012-3456789",
+                LocalDateTime.of(2026, 8, 14, 10, 30),
+                "Deluxe Suite",
+                "Confirmed",
+                "201"
+        ));
+
+        addGuest(new Guest(
+                "34120895",
+                "Sarah Lim",
+                "013-4567890",
+                LocalDateTime.of(2026, 8, 14, 11, 15),
+                "Standard Suite",
+                "Checked-In",
+                "102"
+        ));
+
+        addGuest(new Guest(
+                "76123456",
+                "Michael Wong",
+                "016-5678901",
+                LocalDateTime.of(2026, 8, 14, 12, 0),
+                "Ocean Villa",
+                "Confirmed",
+                "401"
+        ));
+
+        addGuest(new Guest(
+                "12894567",
+                "Emily Lee",
+                "017-6789012",
+                LocalDateTime.of(2026, 8, 14, 13, 20),
+                "Executive Villa",
+                "Confirmed",
+                "301"
+        ));
+
+        addGuest(new Guest(
+                "49382716",
+                "Daniel Chong",
+                "018-7890123",
+                LocalDateTime.of(2026, 8, 14, 14, 5),
+                "Deluxe Suite",
+                "Pending",
+                "202"
+        ));
     }
 }
