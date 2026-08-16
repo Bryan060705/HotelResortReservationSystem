@@ -72,6 +72,10 @@ public class FrontDeskServiceBoundary {
                         break;
 
                     case 6:
+                        updateGuestStatus();
+                        break;
+
+                    case 7:
                         deleteGuest();
                         break;
 
@@ -117,7 +121,8 @@ public class FrontDeskServiceBoundary {
         System.out.println("3. Check Room Availability");
         System.out.println("4. View Billing Details");
         System.out.println("5. Display All Guests");
-        System.out.println("6. Delete Guest");
+        System.out.println("6. Update Guest Status");
+        System.out.println("7. Delete Guest");
         System.out.println("0. Return to Main Menu");
         System.out.println("======================================");
     }
@@ -325,6 +330,78 @@ public class FrontDeskServiceBoundary {
                 "Total guests: " + guests.length);
     }
 
+    /**
+     * Updates the status of an existing guest.
+     *
+     * The front-desk agent can update the guest status
+     * to Pending, Confirmed, Checked-In, or Checked-Out.
+     */
+    private void updateGuestStatus() {
+
+        System.out.println(
+                "========== UPDATE GUEST STATUS ==========");
+
+        String confirmationNumber = readConfirmationNumber();
+
+        Guest guest = control.searchGuest(confirmationNumber);
+
+        if (guest == null) {
+
+            System.out.println(
+                    "Guest not found.");
+
+            return;
+        }
+        
+        System.out.println();
+        System.out.println("Guest found!");
+        System.out.println("--------------------------------------");
+        System.out.println("Guest Name : " + guest.getGuestName());
+        System.out.println("Room       : " + guest.getRoomNumber());
+        System.out.println("Current Status : " + guest.getStatus());
+        System.out.println("--------------------------------------");
+
+        System.out.println("Select new status:");
+        System.out.println("1. Pending");
+        System.out.println("2. Confirmed");
+        System.out.println("3. Checked-In");
+        System.out.println("4. Checked-Out");
+
+        int choice = readInteger("Enter status choice: ");
+
+        String newStatus;
+
+        switch (choice) {
+                case 1:
+                    newStatus = "Pending";
+                    break;
+
+                case 2:
+                    newStatus = "Confirmed";
+                    break;
+
+                case 3:
+                    newStatus = "Checked-In";
+                    break;
+
+                case 4:
+                    newStatus = "Checked-Out";
+                    break;
+
+                default:
+                    System.out.println(
+                        "Invalid status choice.");
+                    return;
+        }    
+        guest.setStatus(newStatus);
+
+        System.out.println();
+        System.out.println(
+                "Guest status updated successfully.");
+        System.out.println(
+                "New Status: " + guest.getStatus());
+    }
+    
     /**
      * Deletes a guest record.
      */
