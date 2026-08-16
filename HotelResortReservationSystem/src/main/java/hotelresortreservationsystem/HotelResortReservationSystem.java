@@ -5,6 +5,7 @@
 package hotelresortreservationsystem;
 
 import boundary.BookingUI;
+import boundary.FrontDeskServiceBoundary;
 import boundary.HotelSystemUI;
 import boundary.HousekeepingUI;
 import control.AuthenticationController;
@@ -44,9 +45,12 @@ public class HotelResortReservationSystem {
             HousekeepingUI housekeepingUI
                     = new HousekeepingUI(housekeepingController, housekeepingReportController, scanner);
 
+            FrontDeskServiceBoundary frontDeskServiceBoundary
+                    = new FrontDeskServiceBoundary(sharedHotelData, scanner);
+
             HotelSystemUI userInterface = new HotelSystemUI(
                     authenticationController, allocationController,
-                    reportController, bookingUI, housekeepingUI, scanner);
+                    reportController, bookingUI, housekeepingUI, frontDeskServiceBoundary, scanner);
 
             userInterface.run();
         }

@@ -27,9 +27,9 @@
         /**
          * Creates the Front-Desk Service boundary.
          */
-        public FrontDeskServiceBoundary(HotelDataStore hotelDataStore) {
+        public FrontDeskServiceBoundary(HotelDataStore hotelDataStore, Scanner scanner) {
         control = new FrontDeskServiceControl(hotelDataStore);
-        scanner = new Scanner(System.in);
+        this.scanner = scanner;
     }
 
         /**
@@ -520,3 +520,5 @@
             }
         }
     }
+
+

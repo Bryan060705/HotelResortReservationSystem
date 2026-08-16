@@ -15,6 +15,7 @@ import java.util.Scanner;
 public class HotelSystemUI {
     private final BookingUI bookingUI;
     private final HousekeepingUI housekeepingUI;
+    private final FrontDeskServiceBoundary frontDeskServiceBoundary;
     private static final int SCREEN_WIDTH = 116;
     private static final DateTimeFormatter DATE_TIME_FORMAT
             = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -30,10 +31,12 @@ public class HotelSystemUI {
             VipReportController reportController,
             BookingUI bookingUI,
             HousekeepingUI housekeepingUI,
+            FrontDeskServiceBoundary frontDeskServiceBoundary,
             Scanner scanner) {
         if (authenticationController == null || allocationController == null
                 || reportController == null || bookingUI == null 
-                || housekeepingUI == null || scanner == null) {
+                || housekeepingUI == null || frontDeskServiceBoundary == null
+                || scanner == null) {
             throw new IllegalArgumentException(
                     "Controllers, boundary UIs, and input scanner are required.");
         }
@@ -42,6 +45,7 @@ public class HotelSystemUI {
         this.reportController = reportController;
         this.bookingUI = bookingUI;
         this.housekeepingUI = housekeepingUI;
+        this.frontDeskServiceBoundary = frontDeskServiceBoundary;
         this.scanner = scanner;
     }
 
@@ -106,7 +110,7 @@ public class HotelSystemUI {
         boolean loggedIn = true;
         while (loggedIn) {
             displayMainMenu(loggedInStaff);
-            int choice = readInt("[COMMAND] > Select choice (0-5): ", 0, 5);
+            int choice = readInt("[COMMAND] > Select choice (0-4): ", 0, 4);
             System.out.println();
             switch (choice) {
                 case 1:
@@ -119,15 +123,7 @@ public class HotelSystemUI {
                     housekeepingUI.run(loggedInStaff);
                     break;
                 case 4:
-//                    displayUnavailableModule(
-//                            "Front-Desk Service & Lookup", "Carret Chong Kar Loke");
-//                    pause();
-                      System.out.println("\n[INFO] Front-Desk Service module is temporarily disabled due to incomplete ADT implementation.");
-                      System.out.println("[NOTE] Please refer to Git commits and restore once BinarySearchTree is implemented.");
-                      pause();
-                      break;
-                case 5:
-                    displayReportMenu();
+                    frontDeskServiceBoundary.run();
                     break;
                 case 0:
                     loggedIn = false;
@@ -153,18 +149,8 @@ public class HotelSystemUI {
         System.out.println("  2. VIP Priority Room Allocation         (Bryan Won Chu Ming)");
         System.out.println("  3. Housekeeping & Task Log              (Bong Xin Yee)");
         System.out.println("  4. Front-Desk Service & Lookup          (Carret Chong Kar Loke)");
-        System.out.println("  5. System Analytical Reports");
         System.out.println("  0. Logout System");
         printDivider('-');
-    }
-
-    // Shows a message for another group member's module.
-    private void displayUnavailableModule(String moduleName, String ownerName) {
-        printDivider('=');
-        printCentered(moduleName.toUpperCase(Locale.ROOT));
-        printDivider('=');
-        System.out.println("MODULE OWNER : " + ownerName);
-        System.out.println("[INFO] This module is handled by another team member.");
     }
 
     // Runs the VIP module until the user returns to the system main menu.
@@ -172,7 +158,7 @@ public class HotelSystemUI {
         boolean moduleOpen = true;
         while (moduleOpen) {
             displayVipModuleMenu(loggedInStaff);
-            int choice = readInt("[COMMAND] > Select choice (0-5): ", 0, 5);
+            int choice = readInt("[COMMAND] > Select choice (0-6): ", 0, 6);
             System.out.println();
             switch (choice) {
                 case 1:
@@ -189,6 +175,9 @@ public class HotelSystemUI {
                     break;
                 case 5:
                     markRoomAvailable();
+                    break;
+                case 6:
+                    displayReportMenu();
                     break;
                 case 0:
                     moduleOpen = false;
@@ -220,6 +209,7 @@ public class HotelSystemUI {
         System.out.println("  3. Allocate Available Room to Highest-Priority Eligible VIP");
         System.out.println("  4. Display Room Availability");
         System.out.println("  5. Mark Room Available (Automatic Priority Allocation)");
+        System.out.println("  6. VIP Management Reports");
         System.out.println("  0. Return to Main Menu");
         printDivider('-');
     }
@@ -573,3 +563,4 @@ public class HotelSystemUI {
         System.out.println(" ".repeat(padding) + text);
     }
 }
+
