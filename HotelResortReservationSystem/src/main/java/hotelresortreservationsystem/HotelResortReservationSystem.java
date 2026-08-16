@@ -23,19 +23,19 @@ public class HotelResortReservationSystem {
         AuthenticationController authenticationController
                 = new AuthenticationController();
         HotelDataStore sharedHotelData = new HotelDataStore();
-        
-        VipRoomAllocationController allocationController
-                = new VipRoomAllocationController(sharedHotelData);
-        VipReportController reportController
-                = new VipReportController(allocationController);
-                
+
         HousekeepingController housekeepingController
                 = new HousekeepingController(sharedHotelData);
         HousekeepingReportController housekeepingReportController
                 = new HousekeepingReportController(housekeepingController);
-                
+
+        VipRoomAllocationController allocationController
+                = new VipRoomAllocationController(sharedHotelData, housekeepingController);
+        VipReportController reportController
+                = new VipReportController(allocationController);
+
         BookingControl bookingControl
-                = new BookingControl(sharedHotelData);
+                = new BookingControl(sharedHotelData, housekeepingController);
 
         try (Scanner scanner = new Scanner(System.in)) {
             BookingUI bookingUI
@@ -46,8 +46,7 @@ public class HotelResortReservationSystem {
 
             HotelSystemUI userInterface = new HotelSystemUI(
                     authenticationController, allocationController,
-                    reportController, housekeepingController,
-                    bookingUI, housekeepingUI, scanner);
+                    reportController, bookingUI, housekeepingUI, scanner);
 
             userInterface.run();
         }

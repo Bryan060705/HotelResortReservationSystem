@@ -8,7 +8,9 @@ import adt.HeapPriorityQueue;
 import adt.PriorityQueueInterface;
 import entity.AllocationRecord;
 import entity.AllocationStatus;
+import entity.CleaningStatus;
 import entity.HotelDataStore;
+import entity.HousekeepingRecord;
 import entity.LoyaltyTier;
 import entity.Room;
 import entity.RoomStatus;
@@ -28,29 +30,32 @@ public final class VipRoomAllocationController {
     private final PriorityQueueInterface<VipGuest> waitingQueue;
     private final Clock clock;
     private final HotelDataStore dataStore;
+    private final HousekeepingController housekeepingController;
     private int nextGuestNumber;
     private int nextAllocationNumber;
 
-    // Creates the controller and loads sample data for demonstration.
+    // Creates the controller with standalone default instances.
     public VipRoomAllocationController() {
-        this(new HotelDataStore(), Clock.systemDefaultZone(), true);
+        this(new HotelDataStore(), new HousekeepingController(new HotelDataStore()), Clock.systemDefaultZone(), true);
     }
 
-    // Receives the shared hotel data used by all integrated modules.
-    public VipRoomAllocationController(HotelDataStore dataStore) {
-        this(dataStore, Clock.systemDefaultZone(), true);
+    // Receives shared hotel data and housekeeping controller used by all integrated modules.
+    public VipRoomAllocationController(HotelDataStore dataStore, HousekeepingController housekeepingController) {
+        this(dataStore, housekeepingController, Clock.systemDefaultZone(), true);
     }
 
     // Creates a controller with a selected clock; this is used by the tests.
     VipRoomAllocationController(Clock clock, boolean loadSampleData) {
-        this(new HotelDataStore(), clock, loadSampleData);
+        this(new HotelDataStore(), new HousekeepingController(new HotelDataStore()), clock, loadSampleData);
     }
 
-    // Creates a controller with shared data and a selected clock for testing.
-    VipRoomAllocationController(HotelDataStore dataStore, Clock clock,
-            boolean loadSampleData) {
+    // Creates a controller with shared data, housekeeping controller, and a selected clock for testing.
+    VipRoomAllocationController(HotelDataStore dataStore, HousekeepingController housekeepingController,
+            Clock clock, boolean loadSampleData) {
         this.dataStore = Objects.requireNonNull(
                 dataStore, "Shared hotel data is required.");
+        this.housekeepingController = Objects.requireNonNull(
+                housekeepingController, "Housekeeping controller is required.");
         this.clock = Objects.requireNonNull(clock, "Clock is required.");
         waitingQueue = new HeapPriorityQueue<>(VIP_PRIORITY_COMPARATOR);
         nextGuestNumber = 1001;
@@ -162,7 +167,7 @@ public final class VipRoomAllocationController {
                 this::hasAvailableCompatibleRoom);
         if (selectedGuest == null) {
             return AllocationResult.failure(
-                    "No compatible room is currently available for any waiting VIP guest.");
+                    "No compatible clean room (READY) is currently available for any waiting VIP guest.");
         }
 
         Room selectedRoom = findFirstAvailableRoom(selectedGuest.getPreferredRoomType());
@@ -180,12 +185,22 @@ public final class VipRoomAllocationController {
         completeActiveAllocation(room.getRoomNumber());
         room.release();
 
+        HousekeepingRecord hkRecord = housekeepingController.findRecord(room.getRoomNumber());
+        boolean isClean = hkRecord != null && hkRecord.getStatus() == CleaningStatus.READY;
+
+        if (!isClean) {
+            return AllocationResult.roomReleased(
+                    "Room " + room.getRoomNumber()
+                    + " was released but is currently DIRTY in Housekeeping. Awaiting cleaning before allocation.",
+                    room.getRoomNumber(), room.getRoomType().getDisplayName());
+        }
+
         VipGuest selectedGuest = waitingQueue.removeHighestMatching(
                 guest -> guest.getPreferredRoomType() == room.getRoomType());
         if (selectedGuest == null) {
             return AllocationResult.roomReleased(
                     "Room " + room.getRoomNumber()
-                    + " is available; no compatible VIP guest is waiting.",
+                    + " is ready and available; no compatible VIP guest is waiting.",
                     room.getRoomNumber(), room.getRoomType().getDisplayName());
         }
 
@@ -229,20 +244,23 @@ public final class VipRoomAllocationController {
         }
     }
 
-    // Checks whether a matching room is currently available for a guest.
+    // Checks whether a matching room is currently available and READY in housekeeping.
     private boolean hasAvailableCompatibleRoom(VipGuest guest) {
         return findFirstAvailableRoom(guest.getPreferredRoomType()) != null;
     }
 
-    // Finds the available matching room with the smallest room number.
+    // Finds the available and READY matching room with the smallest room number.
     private Room findFirstAvailableRoom(RoomType roomType) {
         Room selectedRoom = null;
         for (int index = 0; index < dataStore.getRoomCount(); index++) {
             Room room = dataStore.getRoom(index);
-            if (room.getRoomType() == roomType && room.isAvailable()
-                    && (selectedRoom == null || room.getRoomNumber()
-                            .compareTo(selectedRoom.getRoomNumber()) < 0)) {
-                selectedRoom = room;
+            if (room.getRoomType() == roomType && room.isAvailable()) {
+                HousekeepingRecord hkRecord = housekeepingController.findRecord(room.getRoomNumber());
+                if (hkRecord != null && hkRecord.getStatus() == CleaningStatus.READY) {
+                    if (selectedRoom == null || room.getRoomNumber().compareTo(selectedRoom.getRoomNumber()) < 0) {
+                        selectedRoom = room;
+                    }
+                }
             }
         }
         return selectedRoom;

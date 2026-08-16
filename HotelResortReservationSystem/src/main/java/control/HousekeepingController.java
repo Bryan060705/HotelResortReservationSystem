@@ -70,7 +70,7 @@ public final class HousekeepingController {
         Room[] sharedRooms = dataStore.getRoomsSnapshot();
 
         for (Room room : sharedRooms) {
-            if (findRecord(room.getRoomNumber()) == null) {
+            if (findRecordInternal(room.getRoomNumber()) == null) {
                 ensureRoomCapacity();
 
                 roomRecords[roomRecordCount++] = new HousekeepingRecord(
@@ -83,8 +83,12 @@ public final class HousekeepingController {
         }
     }
 
-    // Find a room using its room number
     public HousekeepingRecord findRecord(String roomNumber) {
+        syncNewRooms();
+        return findRecordInternal(roomNumber);
+    }
+
+    private HousekeepingRecord findRecordInternal(String roomNumber) {
         if (roomNumber == null) {
             return null;
         }
@@ -265,6 +269,12 @@ public final class HousekeepingController {
         LocalDateTime timestamp = now();
 
         record.changeStatus(newStatus, timestamp);
+        
+        // Sync with shared data store
+        Room sharedRoom = dataStore.findRoom(record.getRoomNumber());
+        if (sharedRoom != null && newStatus == CleaningStatus.READY) {
+            sharedRoom.release(); // Marks AVAILABLE for Booking / VIP
+        }
 
         int taskId = nextTaskId++;
 
@@ -297,7 +307,7 @@ public final class HousekeepingController {
         );
     }
 
-    // Remove the latest task from the stack and restore the previous status
+// Remove the latest task from the stack and restore the previous status
     public RollbackResult rollbackLastTask() {
         if (undoStack.isEmpty()) {
             return new RollbackResult(
@@ -310,16 +320,17 @@ public final class HousekeepingController {
             );
         }
 
-        
         CleaningTask topTask = undoStack.peek();
 
-        // Check room availability
+        // Integrity Check: ONLY block rollback if this task made the room READY and a guest has since occupied it
         Room sharedRoom = dataStore.findRoom(topTask.getRoomNumber());
-        if (sharedRoom != null && sharedRoom.getStatus() == entity.RoomStatus.OCCUPIED) {
+        if (topTask.getNewStatus() == CleaningStatus.READY 
+                && sharedRoom != null 
+                && sharedRoom.getStatus() == entity.RoomStatus.OCCUPIED) {
             return new RollbackResult(
                     false,
                     "Integrity Violation: Room " + topTask.getRoomNumber()
-                            + " is already OCCUPIED by a checked-in guest. Rollback rejected.",
+                            + " has already been ALLOCATED to a checked-in guest. Rollback rejected.",
                     topTask.getTaskId(),
                     topTask.getRoomNumber(),
                     null,
@@ -327,15 +338,24 @@ public final class HousekeepingController {
             );
         }
 
-        
         CleaningTask task = undoStack.pop();
         HousekeepingRecord record = findRecord(task.getRoomNumber());
 
         if (record != null) {
             record.revertStatus(task.getPreviousStatus(), now());
+
+            // If we are rolling back away from READY, lock the room back to not available
+            Room sharedRoomToRevert = dataStore.findRoom(task.getRoomNumber());
+            if (sharedRoomToRevert != null) {
+                if (task.getPreviousStatus() == CleaningStatus.READY) {
+                    sharedRoomToRevert.release(); // Reverted back into READY
+                } else if (task.getNewStatus() == CleaningStatus.READY) {
+                    sharedRoomToRevert.setStatus(entity.RoomStatus.OCCUPIED); // Reverted away from READY
+                }
+            }
         }
 
-        return new RollbackResult(
+       return new RollbackResult(
                 true,
                 "Rollback complete! Room " + task.getRoomNumber()
                         + " reverted to '"

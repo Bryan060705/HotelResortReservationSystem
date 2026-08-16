@@ -40,7 +40,7 @@ public final class HousekeepingUI {
         boolean running = true;
         while (running) {
             printDivider('=');
-            printCentered("HOUSEKEEPING & TASK LOG MANAGEMENT");
+            printCentered("[3] HOUSEKEEPING & TASK LOG MANAGEMENT");
             printDivider('=');
             System.out.println("STAFF ON DUTY  : " + loggedInStaff.fullName() + " (" + loggedInStaff.role() + ")");
             System.out.println("ROLLBACK STACK : " + controller.getUndoStackSize() + " task(s) available on ArrayStack ADT");
@@ -100,6 +100,20 @@ public final class HousekeepingUI {
             printCentered("ASSIGN HOUSEKEEPING STAFF TO ROOM");
             printDivider('-');
 
+            // Check if there are any unassigned, non-READY rooms available
+            HousekeepingRecord[] initialCheck = controller.getAllRecordsSnapshot();
+            int unassignedCount = 0;
+            for (HousekeepingRecord r : initialCheck) {
+                if (!r.isAssigned() && r.getStatus() != CleaningStatus.READY) {
+                    unassignedCount++;
+                }
+            }
+
+            if (unassignedCount == 0) {
+                System.out.println("[INFO] All rooms needing cleaning already have staff assigned or are already 'Ready for Check-In'.");
+                return;
+            }
+
             HousekeepingRecord record = null;
             String roomNumber = "";
 
@@ -107,7 +121,6 @@ public final class HousekeepingUI {
             while (record == null) {
                 roomNumber = readRequiredText("Room Number (0=Cancel) : ");
 
-                // Allow returning to menu
                 if ("0".equals(roomNumber) || "X".equalsIgnoreCase(roomNumber)) {
                     System.out.println("[INFO] Operation cancelled.");
                     return;
@@ -126,8 +139,8 @@ public final class HousekeepingUI {
                     continue;
                 }
 
-                // 1. Guard: Block assignment if room is already clean/ready
-                if (record.getStatus() == entity.CleaningStatus.READY) {
+                // Guard 1: Block assignment if room is already clean/ready
+                if (record.getStatus() == CleaningStatus.READY) {
                     System.out.println();
                     System.out.println("[ERROR] Room " + roomNumber + " is already READY for guests. Assignment rejected.");
                     System.out.print("Do you want to try another room? (Y/N): ");
@@ -135,26 +148,26 @@ public final class HousekeepingUI {
                     if (!"Y".equalsIgnoreCase(retry)) {
                         return;
                     }
-                    record = null; // reset to prompt for room number again
+                    record = null;
                     System.out.println();
                     continue;
                 }
 
-                // 2. Guard: Confirmation if room is already assigned to a staff member
+                // Guard 2: Confirmation if room is already assigned to a staff member
                 if (record.isAssigned()) {
                     System.out.println();
                     System.out.println("[WARNING] Room " + roomNumber + " is currently assigned to: " + record.getAssignedStaff());
                     System.out.print("Do you want to reassign this room to another staff? (Y/N): ");
                     String confirm = scanner.nextLine().trim();
                     if (!"Y".equalsIgnoreCase(confirm)) {
-                        record = null; // reset to prompt for room number again
+                        record = null;
                         System.out.println();
                         continue;
                     }
                 }
             }
 
-            // Room is valid and confirmed -> show selectable duty roster
+            // Show selectable duty roster
             String[] staffList = controller.getDutyStaff();
             System.out.println();
             System.out.println("Select Staff on Duty:");
@@ -176,14 +189,26 @@ public final class HousekeepingUI {
                 System.out.println("Status             : " + result.newStatus());
             }
 
-            // Ask if supervisor wants to assign another room immediately
-            System.out.println();
-            System.out.print("Do you want to assign another room? (Y/N): ");
-            String answer = scanner.nextLine().trim();
-            if (!"Y".equalsIgnoreCase(answer)) {
-                continueAssigning = false;
+            // Check if any more unassigned dirty rooms remain before prompting
+            int remainingUnassigned = 0;
+            for (HousekeepingRecord r : controller.getAllRecordsSnapshot()) {
+                if (!r.isAssigned() && r.getStatus() != CleaningStatus.READY) {
+                    remainingUnassigned++;
+                }
             }
-            System.out.println();
+
+            if (remainingUnassigned == 0) {
+                System.out.println("\n[INFO] All dirty rooms have now been assigned to staff.");
+                continueAssigning = false;
+            } else {
+                System.out.println();
+                System.out.print("Do you want to assign another room? (Y/N): ");
+                String answer = scanner.nextLine().trim();
+                if (!"Y".equalsIgnoreCase(answer)) {
+                    continueAssigning = false;
+                }
+                System.out.println();
+            }
         }
     }
 
@@ -195,18 +220,18 @@ public final class HousekeepingUI {
             printCentered("UPDATE ROOM CLEANING STATUS");
             printDivider('-');
 
-            // 1. Filtered Overview: Only display rooms with assigned housekeeping personnel
-            RoomStatusView[] allRooms = controller.getAllRoomStatusesSnapshot();
-            int assignedCount = 0;
-            for (RoomStatusView room : allRooms) {
-                if (!"Unassigned".equalsIgnoreCase(room.assignedStaff())) {
-                    assignedCount++;
+            // Filtered Overview: Only display rooms that are ASSIGNED and NOT YET READY
+            HousekeepingRecord[] allRecords = controller.getAllRecordsSnapshot();
+            int updatableCount = 0;
+            for (HousekeepingRecord record : allRecords) {
+                if (record.isAssigned() && record.getStatus() != CleaningStatus.READY) {
+                    updatableCount++;
                 }
             }
 
-            if (assignedCount == 0) {
-                System.out.println("[INFO] No rooms currently assigned to housekeeping staff.");
-                System.out.println("       Please assign staff to rooms first (Option 2).");
+            if (updatableCount == 0) {
+                System.out.println("[INFO] No rooms currently require status updates.");
+                System.out.println("       (All assigned rooms are already 'Ready for Check-In' or unassigned).");
                 return;
             }
 
@@ -214,13 +239,13 @@ public final class HousekeepingUI {
             System.out.printf(Locale.ROOT, "  %-10s %-18s %-22s %-20s%n", "Room No.", "Room Type", "Status", "Assigned Staff");
             System.out.println("  -------------------------------------------------------------------------");
 
-            for (RoomStatusView room : allRooms) {
-                if (!"Unassigned".equalsIgnoreCase(room.assignedStaff())) {
+            for (HousekeepingRecord record : allRecords) {
+                if (record.isAssigned() && record.getStatus() != CleaningStatus.READY) {
                     System.out.printf(Locale.ROOT, "  %-10s %-18s %-22s %-20s%n",
-                            room.roomNumber(),
-                            room.roomType(),
-                            room.status(),
-                            room.assignedStaff()
+                            record.getRoomNumber(),
+                            record.getRoomType().getDisplayName(),
+                            record.getStatus().getDisplayName(),
+                            record.getAssignedStaff()
                     );
                 }
             }
@@ -229,7 +254,7 @@ public final class HousekeepingUI {
             HousekeepingRecord record = null;
             String roomNumber = "";
 
-            // 2. Validate room number input
+            // Validate room number input
             while (record == null) {
                 roomNumber = readRequiredText("Room Number (0=Cancel) : ");
 
@@ -260,7 +285,7 @@ public final class HousekeepingUI {
                     if (!"Y".equalsIgnoreCase(retry)) {
                         return;
                     }
-                    record = null; // reset to prompt for room number again
+                    record = null;
                     System.out.println();
                     continue;
                 }
@@ -274,15 +299,14 @@ public final class HousekeepingUI {
                     if (!"Y".equalsIgnoreCase(retry)) {
                         return;
                     }
-                    record = null; // reset to prompt for room number again
+                    record = null;
                     System.out.println();
                 }
             }
 
-            // 3. Inner Loop: Allows updating the SAME room multiple times in sequence
+            // Inner Loop: Update the SAME room sequentially
             boolean updateSameRoom = true;
             while (updateSameRoom) {
-                // Fetch fresh status and dynamic options
                 record = controller.findRecord(roomNumber);
                 StatusOption[] options = controller.getAvailableStatusTransitions(record.getStatus());
 
@@ -304,7 +328,6 @@ public final class HousekeepingUI {
 
                 int choice = readIntOrCancel("Select Status (1-" + options.length + ") : ", 1, options.length);
 
-                // If user entered 0, exit, EXIT, etc.
                 if (choice == -1) {
                     System.out.println("[INFO] Status update cancelled for Room " + roomNumber + ".");
                     updateSameRoom = false;
@@ -325,13 +348,12 @@ public final class HousekeepingUI {
                     System.out.println("New Status         : " + result.newStatus());
                 }
 
-                // Check if the room has reached the final state (READY)
+                // Check if current room became READY
                 record = controller.findRecord(roomNumber);
                 if (record.getStatus() == CleaningStatus.READY) {
                     System.out.println("\n[INFO] Room " + record.getRoomNumber() + " is now 'Ready for Check-In' (Final State).");
                     updateSameRoom = false;
                 } else {
-                    // Question 1: Continue updating the SAME room?
                     System.out.println();
                     System.out.print("Do you want to continue updating Room " + roomNumber + "? (Y/N): ");
                     String sameAnswer = scanner.nextLine().trim();
@@ -341,14 +363,27 @@ public final class HousekeepingUI {
                 }
             }
 
-            // Question 2: Update ANOTHER room?
-            System.out.println();
-            System.out.print("Do you want to update another room? (Y/N): ");
-            String anotherAnswer = scanner.nextLine().trim();
-            if (!"Y".equalsIgnoreCase(anotherAnswer)) {
-                continueUpdatingRooms = false;
+            // Recalculate remaining eligible rooms before asking to update another
+            int otherUpdatable = 0;
+            for (HousekeepingRecord r : controller.getAllRecordsSnapshot()) {
+                if (!r.getRoomNumber().equalsIgnoreCase(roomNumber) 
+                        && r.isAssigned() 
+                        && r.getStatus() != CleaningStatus.READY) {
+                    otherUpdatable++;
+                }
             }
-            System.out.println();
+
+            if (otherUpdatable == 0) {
+                continueUpdatingRooms = false;
+            } else {
+                System.out.println();
+                System.out.print("Do you want to update another room? (Y/N): ");
+                String anotherAnswer = scanner.nextLine().trim();
+                if (!"Y".equalsIgnoreCase(anotherAnswer)) {
+                    continueUpdatingRooms = false;
+                }
+                System.out.println();
+            }
         }
     }
 
@@ -365,7 +400,6 @@ public final class HousekeepingUI {
                 return;
             }
 
-            // 1. Peek at top of LIFO stack to show the user what will be reverted
             CleaningTask lastTask = controller.peekLastTask();
             System.out.println("LIFO Top Task on Stack : Task #" + lastTask.getTaskId()
                     + " [Room " + lastTask.getRoomNumber() + "]");
@@ -382,7 +416,6 @@ public final class HousekeepingUI {
                 return;
             }
 
-            // 2. Pop and execute the rollback
             RollbackResult result = controller.rollbackLastTask();
             System.out.println();
             if (!result.success()) {
@@ -396,7 +429,6 @@ public final class HousekeepingUI {
             System.out.println("Reverted Status        : " + result.revertedStatus());
             System.out.println("Remaining Tasks on ADT : " + result.remainingStackSize());
 
-            // 3. If there are still older tasks on the stack, ask if they want to undo another
             if (result.remainingStackSize() > 0) {
                 System.out.println();
                 System.out.print("Do you want to rollback another previous task? (Y/N): ");
@@ -467,7 +499,6 @@ public final class HousekeepingUI {
         }
     }
 
-    
     // Scanner input validation & screen formatting helpers
     private String readRequiredText(String prompt) {
         while (true) {

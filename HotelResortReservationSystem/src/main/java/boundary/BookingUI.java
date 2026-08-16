@@ -76,7 +76,7 @@ public class BookingUI {
 
                 case 0:
                     System.out.println(
-                            "Thank you for using TARUMT Resort Booking System."
+                            "Thank you for using Twin Jets Resort Management System."
                     );
                     break;
 
@@ -88,16 +88,16 @@ public class BookingUI {
     }
 
     private void displayMenu() {
-        System.out.println("\n======================================");
-        System.out.println("   TARUMT RESORT BOOKING SYSTEM");
-        System.out.println("======================================");
+System.out.println("\n===================================================================");
+        System.out.println("              [1] WALK-IN BOOKING & RESERVATION");
+        System.out.println("===================================================================");
         System.out.println("1. Register Walk-In and Book Room");
         System.out.println("2. Assign Room to Waiting Guest");
         System.out.println("3. Cancel Booking");
         System.out.println("4. View Waiting Queue");
         System.out.println("5. Assigned Guest Report");
         System.out.println("6. View Available Rooms ");
-        System.out.println("7. View seatch Guest");
+        System.out.println("7. View search Guest");
         System.out.println("0. Exit");
         System.out.println("======================================");
     }

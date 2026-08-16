@@ -5,7 +5,6 @@
 package boundary;
 
 import control.AuthenticationController;
-import control.HousekeepingController;
 import control.VipReportController;
 import control.VipRoomAllocationController;
 import java.time.LocalDateTime;
@@ -23,27 +22,24 @@ public class HotelSystemUI {
     private final AuthenticationController authenticationController;
     private final VipRoomAllocationController allocationController;
     private final VipReportController reportController;
-    private final HousekeepingController housekeepingController;
     private final Scanner scanner;
 
     // Receives the control objects, module boundary objects, and the Scanner used for user input.
     public HotelSystemUI(AuthenticationController authenticationController,
             VipRoomAllocationController allocationController,
             VipReportController reportController,
-            HousekeepingController housekeepingController,
             BookingUI bookingUI,
             HousekeepingUI housekeepingUI,
             Scanner scanner) {
         if (authenticationController == null || allocationController == null
-                || reportController == null || housekeepingController == null
-                || bookingUI == null || housekeepingUI == null || scanner == null) {
+                || reportController == null || bookingUI == null 
+                || housekeepingUI == null || scanner == null) {
             throw new IllegalArgumentException(
                     "Controllers, boundary UIs, and input scanner are required.");
         }
         this.authenticationController = authenticationController;
         this.allocationController = allocationController;
         this.reportController = reportController;
-        this.housekeepingController = housekeepingController;
         this.bookingUI = bookingUI;
         this.housekeepingUI = housekeepingUI;
         this.scanner = scanner;

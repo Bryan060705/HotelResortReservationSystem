@@ -8,6 +8,8 @@ import entity.Guest;
 import entity.Room;
 import entity.RoomType;
 import entity.HotelDataStore;
+import entity.HousekeepingRecord;
+import entity.CleaningStatus;
 import adt.LinkedQueue;
 import java.time.LocalDateTime;
 import java.util.Iterator;
@@ -21,8 +23,9 @@ public class BookingControl {
     private LinkedQueue<Guest> bookingQueue;
     private LinkedQueue<Guest> confirmedBookings;
     private final HotelDataStore hotelDataStore;
+    private final HousekeepingController housekeepingController;
 
-    public BookingControl(HotelDataStore hotelDataStore) {
+    public BookingControl(HotelDataStore hotelDataStore, HousekeepingController housekeepingController) {
 
         if (hotelDataStore == null) {
             throw new IllegalArgumentException(
@@ -30,7 +33,14 @@ public class BookingControl {
             );
         }
 
+        if (housekeepingController == null) {
+            throw new IllegalArgumentException(
+                    "Housekeeping controller is required."
+            );
+        }
+
         this.hotelDataStore = hotelDataStore;
+        this.housekeepingController = housekeepingController;
         bookingQueue = new LinkedQueue<>();
         confirmedBookings = new LinkedQueue<>();
     }
@@ -247,35 +257,39 @@ public class BookingControl {
         return RoomType.fromDisplayName(roomType);
     }
 
+    // Room must be AVAILABLE in HotelDataStore AND marked READY in Housekeeping
     private Room findAvailableRoom(String requestedRoomType) {
 
         RoomType roomType = convertRoomType(requestedRoomType);
         Room[] rooms = hotelDataStore.getRoomsSnapshot();
 
         for (Room room : rooms) {
-            if (room.getRoomType() == roomType
-                    && room.isAvailable()) {
-                return room;
+            if (room.getRoomType() == roomType && room.isAvailable()) {
+                HousekeepingRecord hkRecord = housekeepingController.findRecord(room.getRoomNumber());
+                if (hkRecord != null && hkRecord.getStatus() == CleaningStatus.READY) {
+                    return room;
+                }
             }
         }
 
         return null;
     }
     
+    // Counts only rooms that are both AVAILABLE and READY for check-in
     public int getAvailableRoomCount(RoomType requestedType) {
 
-    int count = 0;
+        int count = 0;
+        Room[] rooms = hotelDataStore.getRoomsSnapshot();
 
-    Room[] rooms = hotelDataStore.getRoomsSnapshot();
-
-    for (Room room : rooms) {
-        if (room.getRoomType() == requestedType
-                && room.isAvailable()) {
-
-            count++;
+        for (Room room : rooms) {
+            if (room.getRoomType() == requestedType && room.isAvailable()) {
+                HousekeepingRecord hkRecord = housekeepingController.findRecord(room.getRoomNumber());
+                if (hkRecord != null && hkRecord.getStatus() == CleaningStatus.READY) {
+                    count++;
+                }
+            }
         }
-    }
 
-    return count;
-}
+        return count;
+    }
 }
