@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
  * @author user
  */
 
-public class Guest {
+public class Guest implements Comparable<Guest>{
 
     private String guestID;
     private String guestName;
