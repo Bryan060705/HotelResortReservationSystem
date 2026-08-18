@@ -1,13 +1,10 @@
 /*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
+* Author: Tang Hong Yi
+ * Console boundary for booking, guest registration/cancellation, waitng guest report and assigned guest report
+*/
+
 package boundary;
 
-/**
- *
- * @author user
- */
 import adt.LinkedQueue;
 import java.util.Scanner;
 import java.util.Iterator;
