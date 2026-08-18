@@ -14,18 +14,16 @@ import adt.LinkedQueue;
 import java.time.LocalDateTime;
 import java.util.Iterator;
 
-/**
- *
- * @author user
- */
 public class BookingControl {
 
     private LinkedQueue<Guest> bookingQueue;
     private LinkedQueue<Guest> confirmedBookings;
     private final HotelDataStore hotelDataStore;
     private final HousekeepingController housekeepingController;
+    private final VipRoomAllocationController vipController;
+    private int nextGuestID = 1;
 
-    public BookingControl(HotelDataStore hotelDataStore, HousekeepingController housekeepingController) {
+    public BookingControl(HotelDataStore hotelDataStore, HousekeepingController housekeepingController,VipRoomAllocationController vipController) {
 
         if (hotelDataStore == null) {
             throw new IllegalArgumentException(
@@ -41,14 +39,17 @@ public class BookingControl {
 
         this.hotelDataStore = hotelDataStore;
         this.housekeepingController = housekeepingController;
+        this.vipController = vipController;
+        
         bookingQueue = new LinkedQueue<>();
         confirmedBookings = new LinkedQueue<>();
     }
 
-    public Guest registerWalkIn(String guestID,
-            String guestName,
+    public Guest registerWalkIn(String guestName,
             String phoneNumber,
             String roomType) {
+
+        String guestID = generateGuestID();
 
         Guest guest = new Guest(
                 guestID,
@@ -91,7 +92,7 @@ public class BookingControl {
         return guest;
     }
 
-    public Guest assignRoom() {
+    private Guest assignStandardRoom() {
 
         if (bookingQueue.isEmpty()) {
             return null;
@@ -274,7 +275,7 @@ public class BookingControl {
 
         return null;
     }
-    
+
     // Counts only rooms that are both AVAILABLE and READY for check-in
     public int getAvailableRoomCount(RoomType requestedType) {
 
@@ -292,4 +293,81 @@ public class BookingControl {
 
         return count;
     }
+    
+    
+    
+    //assign ID to Guest
+    private String generateGuestID() {
+
+        String guestID;
+
+        do {
+            guestID = String.format("G%04d", nextGuestID);
+            nextGuestID++;
+        } while (searchGuestByID(guestID) != null);
+
+        return guestID;
+    }
+    
+    //record Guest info when assign room
+    public record AssignRoomResult(
+        boolean success,
+        String guestType,
+        String guestID,
+        String guestName,
+        String roomNumber,
+        String roomType,
+        String message
+) {
+}
+    
+    
+    public AssignRoomResult assignRoom() {
+
+    // VIP gets priority first
+    VipRoomAllocationController.AllocationResult vipResult
+            = vipController.allocateHighestPriorityVip();
+
+    if (vipResult.allocationCreated()) {
+
+        return new AssignRoomResult(
+                true,
+                "VIP",
+                vipResult.guestId(),
+                vipResult.guestName(),
+                vipResult.roomNumber(),
+                vipResult.roomType(),
+                vipResult.message()
+        );
+    }
+
+    // If no eligible VIP can be assigned,
+    // try the normal FIFO waiting queue
+    Guest guest = assignStandardRoom();
+
+    if (guest != null) {
+
+        return new AssignRoomResult(
+                true,
+                "Standard",
+                guest.getGuestID(),
+                guest.getGuestName(),
+                guest.getRoomNumber(),
+                guest.getRoomType(),
+                "Standard waiting guest assigned successfully."
+        );
+    }
+
+    return new AssignRoomResult(
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "No eligible VIP or standard guest can currently be assigned."
+    );
+}
+    
+    
 }
