@@ -36,7 +36,7 @@ public class HotelResortReservationSystem {
                 = new VipReportController(allocationController);
 
         BookingControl bookingControl
-                = new BookingControl(sharedHotelData, housekeepingController);
+                = new BookingControl(sharedHotelData, housekeepingController, allocationController);
 
         try (Scanner scanner = new Scanner(System.in)) {
             BookingUI bookingUI
