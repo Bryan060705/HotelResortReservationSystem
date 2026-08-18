@@ -41,9 +41,11 @@ public class BookingUI {
         do {
             displayMenu();
 
-            System.out.print("Enter your choice: ");
-            choice = scanner.nextInt();
-            scanner.nextLine();
+            choice = readValidInteger(
+                    "Enter your choice: ",
+                    0,
+                    7
+            );
 
             switch (choice) {
                 case 1:
@@ -88,7 +90,7 @@ public class BookingUI {
     }
 
     private void displayMenu() {
-System.out.println("\n===================================================================");
+        System.out.println("\n===================================================================");
         System.out.println("              [1] WALK-IN BOOKING & RESERVATION");
         System.out.println("===================================================================");
         System.out.println("1. Register Walk-In and Book Room");
@@ -98,7 +100,7 @@ System.out.println("\n==========================================================
         System.out.println("5. Assigned Guest Report");
         System.out.println("6. View Available Rooms ");
         System.out.println("7. View search Guest");
-        System.out.println("0. Exit");
+        System.out.println("0. Back to Main Menu");
         System.out.println("======================================");
     }
 
@@ -106,11 +108,7 @@ System.out.println("\n==========================================================
 
         System.out.println("\n====== WALK-IN REGISTRATION ======");
 
-        System.out.print("Enter Guest ID: ");
-        String guestID = scanner.nextLine().trim();
-
         String guestName = readValidName();
-
         String phoneNumber = readValidPhoneNumber();
 
         System.out.println("\nRoom Type");
@@ -118,10 +116,11 @@ System.out.println("\n==========================================================
         System.out.println("2. Deluxe Suite");
         System.out.println("3. Executive Villa");
         System.out.println("4. Ocean Villa");
-        System.out.print("Choose room type: ");
-
-        int choice = scanner.nextInt();
-        scanner.nextLine();
+        int choice = readValidInteger(
+                "Choose room type: ",
+                1,
+                4
+        );
 
         String roomType;
 
@@ -148,11 +147,15 @@ System.out.println("\n==========================================================
         }
 
         Guest guest = bookingControl.registerWalkIn(
-                guestID,
                 guestName,
                 phoneNumber,
                 roomType
         );
+
+        if (guest == null) {
+            System.out.println("Registration failed.");
+            return;
+        }
 
         if ("Assigned".equals(guest.getStatus())) {
             System.out.println("A room is available.");
@@ -171,20 +174,20 @@ System.out.println("\n==========================================================
     }
 
     public void assignRoomUI() {
-        Guest guest = bookingControl.assignRoom();
+        BookingControl.AssignRoomResult result
+                = bookingControl.assignRoom();
 
-        if (guest == null) {
-            System.out.println("There are no room to be assign" + "There may no waiting guest" + "the request room type is unavailable");
-        } else {
-
-            System.out.println("\nGuest successfully assigned!");
-            System.out.println("Guest ID   : " + guest.getGuestID());
-            System.out.println("Guest Name : " + guest.getGuestName());
-            System.out.println("Room Type  : " + guest.getRoomType());
-            System.out.println("Room Number: " + guest.getRoomNumber());
-            System.out.println("Status     : " + guest.getStatus());
-
+        if (!result.success()) {
+            System.out.println(result.message());
+            return;
         }
+
+        System.out.println("\nGuest successfully assigned!");
+        System.out.println("Guest Type  : " + result.guestType());
+        System.out.println("Guest ID    : " + result.guestID());
+        System.out.println("Guest Name  : " + result.guestName());
+        System.out.println("Room Type   : " + result.roomType());
+        System.out.println("Room Number : " + result.roomNumber());
     }
 
     public void displayWaitingQueueReportUI() {
@@ -283,13 +286,14 @@ System.out.println("\n==========================================================
 
         System.out.println("\n===== CANCEL BOOKING =====");
 
-        System.out.print("Enter Guest ID: ");
-        String guestID = scanner.nextLine();
+        String guestID = readValidGuestID(
+                "Enter Guest ID to cancel: "
+        );
 
         Guest cancelledGuest = bookingControl.cancelBooking(guestID);
 
         if (cancelledGuest == null) {
-            System.out.println("Guest ID not found in the waiting queue.");
+            System.out.println("Guest ID not found.");
         } else {
             System.out.println("\nBooking cancelled successfully.");
             System.out.println("Guest ID   : " + cancelledGuest.getGuestID());
@@ -328,7 +332,7 @@ System.out.println("\n==========================================================
             }
 
             System.out.println(
-                    "Invalid phone number. Enter a Malaysian mobile number "
+                    "Invalid phone number. Enter valid mobile number "
                     + "such as 0123456789."
             );
         }
@@ -336,26 +340,26 @@ System.out.println("\n==========================================================
 
     public void displayAvailableRoomsUI() {
 
-    System.out.println("\n===== AVAILABLE ROOMS =====");
+        System.out.println("\n===== AVAILABLE ROOMS =====");
 
-    System.out.println("Standard Suite  : "
-            + bookingControl.getAvailableRoomCount(
-                    RoomType.STANDARD_SUITE));
+        System.out.println("Standard Suite  : "
+                + bookingControl.getAvailableRoomCount(
+                        RoomType.STANDARD_SUITE));
 
-    System.out.println("Deluxe Suite    : "
-            + bookingControl.getAvailableRoomCount(
-                    RoomType.DELUXE_SUITE));
+        System.out.println("Deluxe Suite    : "
+                + bookingControl.getAvailableRoomCount(
+                        RoomType.DELUXE_SUITE));
 
-    System.out.println("Executive Villa : "
-            + bookingControl.getAvailableRoomCount(
-                    RoomType.EXECUTIVE_VILLA));
+        System.out.println("Executive Villa : "
+                + bookingControl.getAvailableRoomCount(
+                        RoomType.EXECUTIVE_VILLA));
 
-    System.out.println("Ocean Villa     : "
-            + bookingControl.getAvailableRoomCount(
-                    RoomType.OCEAN_VILLA));
+        System.out.println("Ocean Villa     : "
+                + bookingControl.getAvailableRoomCount(
+                        RoomType.OCEAN_VILLA));
 
-    System.out.println("===========================");
-}
+        System.out.println("===========================");
+    }
 
     public void displayAssignedGuestReportUI() {
 
@@ -364,23 +368,31 @@ System.out.println("\n==========================================================
             return;
         }
 
-        Iterator<Guest> iterator
-                = bookingControl.getConfirmedBookingIterator();
+        Guest[] guests
+                = bookingControl.getConfirmedGuestsSortedByBookingDate();
 
-        int number = 1;
-        int standardCount = 0;
-        int deluxeCount = 0;
-        int suiteCount = 0;
+        int standardSuiteCount = 0;
+        int deluxeSuiteCount = 0;
+        int executiveVillaCount = 0;
+        int oceanVillaCount = 0;
 
-        System.out.println("\n"
-                + "==============================================================");
+        System.out.println(
+                "\n=============================================================="
+        );
         System.out.println("                  ASSIGNED GUEST REPORT");
         System.out.println(
                 "=============================================================="
         );
+        System.out.println(
+                "Sorted By: Booking Date (Earliest to Latest)"
+        );
+        System.out.println(
+                "--------------------------------------------------------------"
+        );
 
-        while (iterator.hasNext()) {
-            Guest guest = iterator.next();
+        int number = 1;
+
+        for (Guest guest : guests) {
 
             System.out.println("Assigned Guest No. : " + number);
             System.out.println("Guest ID           : "
@@ -397,27 +409,57 @@ System.out.println("\n==========================================================
                     + guest.getBookingDate().format(DATE_FORMATTER));
             System.out.println("Status             : "
                     + guest.getStatus());
+
             System.out.println(
                     "--------------------------------------------------------------"
             );
 
-            if (guest.getRoomType().equalsIgnoreCase("Standard")) {
-                standardCount++;
-            } else if (guest.getRoomType().equalsIgnoreCase("Deluxe")) {
-                deluxeCount++;
-            } else if (guest.getRoomType().equalsIgnoreCase("Suite")) {
-                suiteCount++;
+            if (guest.getRoomType()
+                    .equalsIgnoreCase("Standard Suite")) {
+
+                standardSuiteCount++;
+
+            } else if (guest.getRoomType()
+                    .equalsIgnoreCase("Deluxe Suite")) {
+
+                deluxeSuiteCount++;
+
+            } else if (guest.getRoomType()
+                    .equalsIgnoreCase("Executive Villa")) {
+
+                executiveVillaCount++;
+
+            } else if (guest.getRoomType()
+                    .equalsIgnoreCase("Ocean Villa")) {
+
+                oceanVillaCount++;
             }
 
             number++;
         }
 
         System.out.println("\nREPORT SUMMARY");
-        System.out.println("Total Assigned Guests : "
-                + bookingControl.getConfirmedBookingCount());
-        System.out.println("Standard Rooms         : " + standardCount);
-        System.out.println("Deluxe Rooms           : " + deluxeCount);
-        System.out.println("Suite Rooms            : " + suiteCount);
+
+        System.out.println(
+                "Total Assigned Guests : " + guests.length
+        );
+
+        System.out.println(
+                "Standard Suite         : " + standardSuiteCount
+        );
+
+        System.out.println(
+                "Deluxe Suite           : " + deluxeSuiteCount
+        );
+
+        System.out.println(
+                "Executive Villa        : " + executiveVillaCount
+        );
+
+        System.out.println(
+                "Ocean Villa            : " + oceanVillaCount
+        );
+
         System.out.println(
                 "=============================================================="
         );
@@ -426,8 +468,9 @@ System.out.println("\n==========================================================
     public void searchGuestUI() {
         System.out.println("\n====SEARCH GUEST====");
 
-        System.out.println("Enter Guest ID:");
-        String guestID = scanner.nextLine();
+        String guestID = readValidGuestID(
+                "Enter Guest ID to search: "
+        );
 
         Guest guest = bookingControl.searchGuestByID(guestID);
 
@@ -451,4 +494,50 @@ System.out.println("\n==========================================================
 
         }
     }
+
+    private int readValidInteger(String prompt, int min, int max) {
+
+        while (true) {
+            System.out.print(prompt);
+
+            String input = scanner.nextLine().trim();
+
+            try {
+                int value = Integer.parseInt(input);
+
+                if (value >= min && value <= max) {
+                    return value;
+                }
+
+                System.out.println(
+                        "Please enter a number between "
+                        + min + " and " + max + "."
+                );
+
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid input. Please enter a number.");
+            }
+        }
+    }
+
+    private String readValidGuestID(String prompt) {
+
+        while (true) {
+            System.out.print(prompt);
+
+            String guestID = scanner.nextLine()
+                    .trim()
+                    .toUpperCase();
+
+            if (guestID.matches("G\\d{4}")) {
+                return guestID;
+            }
+
+            System.out.println(
+                    "Invalid Guest ID format. "
+                    + "Use format G0001."
+            );
+        }
+    }
+
 }
