@@ -1,14 +1,9 @@
 /*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+ * Author: CARRET CHONG KAR LOKE
  */
 
 package adt;
 
-/**
- * Defines the operations supported by the Binary Search Tree.
- *
- * @param <T> the type of data stored in the tree
- */
 public interface BinarySearchTreeInterface<T extends Comparable<T>> {
 
     /**
