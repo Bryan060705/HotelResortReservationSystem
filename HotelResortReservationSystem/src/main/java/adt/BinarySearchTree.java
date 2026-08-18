@@ -1,6 +1,7 @@
 package adt;
 
 /**
+ * Author: CARRET CHONG KAR LOKE
  * BinarySearchTree stub matching FrontDeskServiceControl requirements.
  */
 
