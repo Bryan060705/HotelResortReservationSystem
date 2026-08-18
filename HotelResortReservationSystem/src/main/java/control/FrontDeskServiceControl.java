@@ -1,8 +1,7 @@
-package control;
-
 /*
-Author: CARRET CHONG KAR LOKE
+ * Author: CARRET CHONG KAR LOKE
  */
+package control;
 
 import adt.BinarySearchTree;
 import entity.Guest;
