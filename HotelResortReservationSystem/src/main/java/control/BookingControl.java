@@ -13,6 +13,7 @@ import entity.CleaningStatus;
 import adt.LinkedQueue;
 import java.time.LocalDateTime;
 import java.util.Iterator;
+import java.time.LocalDate;
 
 public class BookingControl {
 
@@ -341,8 +342,8 @@ public class BookingControl {
         );
     }
 
-    // If no eligible VIP can be assigned,
-    // try the normal FIFO waiting queue
+    // If no eligible VIP can be assigned,try the normal FIFO waiting queue
+    
     Guest guest = assignStandardRoom();
 
     if (guest != null) {
@@ -369,5 +370,110 @@ public class BookingControl {
     );
 }
     
+    private boolean matchesFilter(
+        Guest guest,
+        String roomTypeFilter,
+        LocalDate dateFilter) {
+
+    boolean roomMatches =
+            roomTypeFilter == null 
+            || roomTypeFilter.equalsIgnoreCase("All")
+            || guest.getRoomType().equalsIgnoreCase(roomTypeFilter);
+
+    boolean dateMatches =
+            dateFilter == null
+            || guest.getBookingDate()
+                    .toLocalDate()
+                    .equals(dateFilter);
+
+    return roomMatches && dateMatches;
+}
+    
+   public Guest[] getFilteredWaitingGuests(
+        String roomTypeFilter,
+        LocalDate dateFilter) {
+
+    // First count matching guests
+    int count = 0;
+
+    Iterator<Guest> iterator = bookingQueue.getIterator();
+
+    while (iterator.hasNext()) {
+
+        Guest guest = iterator.next();
+
+        if (matchesFilter(
+                guest,
+                roomTypeFilter,
+                dateFilter)) {
+
+            count++;
+        }
+    }
+
+    // Create array with correct size
+    Guest[] filteredGuests = new Guest[count];
+
+    iterator = bookingQueue.getIterator();
+
+    int index = 0;
+
+    while (iterator.hasNext()) {
+
+        Guest guest = iterator.next();
+
+        if (matchesFilter(
+                guest,
+                roomTypeFilter,
+                dateFilter)) {
+
+            filteredGuests[index] = guest;
+            index++;
+        }
+    }
+
+    return filteredGuests;
+}
+    
+   public Guest[] getFilteredAssignedGuests(
+        String roomTypeFilter,
+        LocalDate dateFilter) {
+
+    Guest[] sortedGuests =
+            getConfirmedGuestsSortedByBookingDate();
+
+    int count = 0;
+
+    // Count matches
+    for (Guest guest : sortedGuests) {
+
+        if (matchesFilter(
+                guest,
+                roomTypeFilter,
+                dateFilter)) {
+
+            count++;
+        }
+    }
+
+    Guest[] filteredGuests = new Guest[count];
+
+    int index = 0;
+
+    for (Guest guest : sortedGuests) {
+
+        if (matchesFilter(
+                guest,
+                roomTypeFilter,
+                dateFilter)) {
+
+            filteredGuests[index] = guest;
+            index++;
+        }
+    }
+
+    return filteredGuests;
+}
+   
     
 }
