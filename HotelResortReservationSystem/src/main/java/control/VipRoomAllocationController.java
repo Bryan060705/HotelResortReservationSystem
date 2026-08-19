@@ -150,9 +150,18 @@ public final class VipRoomAllocationController {
         RoomView[] views = new RoomView[sortedRooms.length];
         for (int index = 0; index < sortedRooms.length; index++) {
             Room room = sortedRooms[index];
+            HousekeepingRecord hkRecord = housekeepingController.findRecord(room.getRoomNumber());
+            String housekeepingStatus = hkRecord == null ? "Not Tracked"
+                    : hkRecord.getStatus().getDisplayName();
+            String readyForVip = room.isAvailable()
+                    && hkRecord != null
+                    && hkRecord.getStatus() == CleaningStatus.READY
+                    ? "Yes" : "No";
             views[index] = new RoomView(room.getRoomNumber(),
                     room.getRoomType().getDisplayName(),
-                    room.getStatus().getDisplayName());
+                    room.getStatus().getDisplayName(),
+                    housekeepingStatus,
+                    readyForVip);
         }
         return views;
     }
@@ -437,7 +446,7 @@ public final class VipRoomAllocationController {
     }
 
     // Stores one room row for the boundary.
-    public record RoomView(String roomNumber, String roomType, String status) {
+    public record RoomView(String roomNumber, String roomType, String status, String housekeepingStatus, String readyForVip) {
     }
 
     // Stores either a successful allocation or a failure message.
@@ -471,3 +480,4 @@ public final class VipRoomAllocationController {
         }
     }
 }
+

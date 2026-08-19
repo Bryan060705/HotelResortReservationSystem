@@ -206,8 +206,8 @@ public class HotelSystemUI {
         printDivider('-');
         System.out.println("  1. Register High-Tier VIP Guest");
         System.out.println("  2. Display Reorganized Priority Heap (Custom PriorityQueue ADT)");
-        System.out.println("  3. Allocate Available Room to Highest-Priority Eligible VIP");
-        System.out.println("  4. Display Room Availability");
+        System.out.println("  3. Allocate Room to Highest-Priority VIP Only");
+        System.out.println("  4. Display Room Availability & Cleaning Readiness");
         System.out.println("  5. Mark Room Available (Automatic Priority Allocation)");
         System.out.println("  6. VIP Management Reports");
         System.out.println("  0. Return to Main Menu");
@@ -278,9 +278,9 @@ public class HotelSystemUI {
         printDivider('=');
     }
 
-    // Requests a manual allocation for the highest eligible VIP guest.
+    // Requests a manual VIP-only allocation for the highest eligible VIP guest.
     private void allocateHighestPriorityVip() {
-        System.out.println("[SYSTEM] Searching heap for the highest-priority guest with a compatible room...");
+        System.out.println("[SYSTEM] VIP-only allocation: searching heap for the highest-priority guest with a compatible room...");
         VipRoomAllocationController.AllocationResult result
                 = allocationController.allocateHighestPriorityVip();
         displayAllocationResult(result);
@@ -291,14 +291,15 @@ public class HotelSystemUI {
         VipRoomAllocationController.RoomView[] rooms
                 = allocationController.getRoomViews();
         printDivider('=');
-        printCentered("ROOM AVAILABILITY");
+        printCentered("ROOM AVAILABILITY & CLEANING READINESS");
         printDivider('=');
-        System.out.printf(Locale.ROOT, "%-12s %-24s %-12s%n",
-                "Room No.", "Room Type", "Status");
+        System.out.printf(Locale.ROOT, "%-12s %-24s %-12s %-24s %-14s%n",
+                "Room No.", "Room Type", "Room Status", "Housekeeping", "Ready for VIP");
         printDivider('-');
         for (VipRoomAllocationController.RoomView room : rooms) {
-            System.out.printf(Locale.ROOT, "%-12s %-24s %-12s%n",
-                    room.roomNumber(), room.roomType(), room.status());
+            System.out.printf(Locale.ROOT, "%-12s %-24s %-12s %-24s %-14s%n",
+                    room.roomNumber(), room.roomType(), room.status(),
+                    room.housekeepingStatus(), room.readyForVip());
         }
         printDivider('=');
     }
@@ -563,4 +564,6 @@ public class HotelSystemUI {
         System.out.println(" ".repeat(padding) + text);
     }
 }
+
+
 
