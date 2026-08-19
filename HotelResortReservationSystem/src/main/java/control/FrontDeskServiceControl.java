@@ -281,4 +281,38 @@ public class FrontDeskServiceControl {
 
         return "Pending";
     }
-}
+    /**
+     * Loads sample guest records for testing and demonstration.
+     */
+    private void loadSampleGuests() {
+        addGuest(new Guest(
+                "12345678",
+                "Alice Tan",
+                "0123456789",
+                LocalDateTime.now(),
+                "Standard Suite",
+                "Confirmed",
+                "101"
+        ));
+
+        addGuest(new Guest(
+                "23456789",
+                "Daniel Lim",
+                "0134567890",
+                LocalDateTime.now(),
+                "Deluxe Suite",
+                "Checked-In",
+                "201"
+        ));
+
+        addGuest(new Guest(
+                "34567890",
+                "Sarah Wong",
+                "0145678901",
+                LocalDateTime.now(),
+                "Ocean Villa",
+                "Confirmed",
+                "301"
+        ));
+    }
+    }
