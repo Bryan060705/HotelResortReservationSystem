@@ -1,14 +1,13 @@
 /*
 * Author: Tang Hong Yi
  * Console boundary for booking, guest registration/cancellation, waitng guest report and assigned guest report
-*/
-
+ */
 package boundary;
 
-import adt.LinkedQueue;
 import java.util.Scanner;
-import java.util.Iterator;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import control.BookingControl;
 import entity.Guest;
 import entity.RoomType;
@@ -93,8 +92,8 @@ public class BookingUI {
         System.out.println("1. Register Walk-In and Book Room");
         System.out.println("2. Assign Room to Waiting Guest");
         System.out.println("3. Cancel Booking");
-        System.out.println("4. View Waiting Queue");
-        System.out.println("5. Assigned Guest Report");
+        System.out.println("4. View Waiting Normal Guest Queue");
+        System.out.println("5. Assigned Normal Guest Report");
         System.out.println("6. View Available Rooms ");
         System.out.println("7. View search Guest");
         System.out.println("0. Back to Main Menu");
@@ -189,14 +188,29 @@ public class BookingUI {
 
     public void displayWaitingQueueReportUI() {
 
-        LinkedQueue<Guest> queue = bookingControl.getBookingQueue();
+        System.out.println("\n===== WAITING GUEST REPORT =====");
 
-        if (queue.isEmpty()) {
-            System.out.println("\nThere are no waiting guests.");
+        String roomTypeFilter
+                = selectRoomTypeFilter();
+
+        LocalDate dateFilter
+                = selectDateFilter();
+
+        Guest[] guests
+                = bookingControl.getFilteredWaitingGuests(
+                        roomTypeFilter,
+                        dateFilter
+                );
+
+        if (guests.length == 0) {
+
+            System.out.println(
+                    "\nNo waiting guests match "
+                    + "the selected filters."
+            );
+
             return;
         }
-
-        Iterator<Guest> iterator = queue.getIterator();
 
         int position = 1;
         int standardSuiteCount = 0;
@@ -204,17 +218,20 @@ public class BookingUI {
         int executiveVillaCount = 0;
         int oceanVillaCount = 0;
 
-        System.out.println(
-                "\n=============================================================="
-        );
+        System.out.println("\n==============================================================");
         System.out.println("                 WAITING GUEST REPORT");
+        System.out.println("==============================================================");
+
+        System.out.println("Room Type Filter : " + roomTypeFilter);
+
         System.out.println(
-                "=============================================================="
+                "Date Filter      : "+ (dateFilter == null ? "All Dates" : dateFilter.format(
+                                DateTimeFormatter.ofPattern("dd-MM-yyyy")))
         );
 
-        while (iterator.hasNext()) {
+        System.out.println("------------------------------------------------");
 
-            Guest guest = iterator.next();
+        for (Guest guest : guests) {
 
             System.out.println("Queue Position : " + position);
             System.out.println("Guest ID       : " + guest.getGuestID());
@@ -252,10 +269,7 @@ public class BookingUI {
         Guest firstGuest = bookingControl.getFirstWaitingGuest();
 
         System.out.println("\nREPORT SUMMARY");
-        System.out.println(
-                "Total Waiting Guests : "
-                + bookingControl.getWaitingGuestCount()
-        );
+        System.out.println("Total Waiting Guests : " + +guests.length);
         System.out.println(
                 "Standard Suite        : " + standardSuiteCount
         );
@@ -274,24 +288,21 @@ public class BookingUI {
         System.out.println("Guest Name : " + firstGuest.getGuestName());
         System.out.println("Room Type  : " + firstGuest.getRoomType());
 
-        System.out.println(
-                "=============================================================="
-        );
+        System.out.println("==============================================================");
     }
 
     public void cancelBookingUI() {
 
         System.out.println("\n===== CANCEL BOOKING =====");
 
-        String guestID = readValidGuestID(
-                "Enter Guest ID to cancel: "
-        );
+        String guestID = readValidGuestID("Enter Guest ID to cancel: ");
 
         Guest cancelledGuest = bookingControl.cancelBooking(guestID);
 
         if (cancelledGuest == null) {
             System.out.println("Guest ID not found.");
-        } else {
+        } 
+        else {
             System.out.println("\nBooking cancelled successfully.");
             System.out.println("Guest ID   : " + cancelledGuest.getGuestID());
             System.out.println("Guest Name : " + cancelledGuest.getGuestName());
@@ -339,127 +350,115 @@ public class BookingUI {
 
         System.out.println("\n===== AVAILABLE ROOMS =====");
 
-        System.out.println("Standard Suite  : "
-                + bookingControl.getAvailableRoomCount(
-                        RoomType.STANDARD_SUITE));
+        System.out.println("Standard Suite  : "+ bookingControl.getAvailableRoomCount(RoomType.STANDARD_SUITE));
 
-        System.out.println("Deluxe Suite    : "
-                + bookingControl.getAvailableRoomCount(
-                        RoomType.DELUXE_SUITE));
+        System.out.println("Deluxe Suite    : "+ bookingControl.getAvailableRoomCount(RoomType.DELUXE_SUITE));
 
-        System.out.println("Executive Villa : "
-                + bookingControl.getAvailableRoomCount(
-                        RoomType.EXECUTIVE_VILLA));
+        System.out.println("Executive Villa : "+ bookingControl.getAvailableRoomCount(RoomType.EXECUTIVE_VILLA));
 
-        System.out.println("Ocean Villa     : "
-                + bookingControl.getAvailableRoomCount(
-                        RoomType.OCEAN_VILLA));
+        System.out.println("Ocean Villa     : "+ bookingControl.getAvailableRoomCount(RoomType.OCEAN_VILLA));
 
         System.out.println("===========================");
     }
 
     public void displayAssignedGuestReportUI() {
 
-        if (!bookingControl.hasConfirmedBookings()) {
-            System.out.println("\nThere are no assigned guests.");
+        System.out.println("\n===== ASSIGNED GUEST REPORT =====");
+
+        String roomTypeFilter
+                = selectRoomTypeFilter();
+
+        LocalDate dateFilter
+                = selectDateFilter();
+
+        Guest[] guests= bookingControl.getFilteredAssignedGuests(roomTypeFilter,dateFilter);
+
+        if (guests.length == 0) {
+
+            System.out.println("\n No assigned guests match the selected filters.");
+
             return;
         }
-
-        Guest[] guests
-                = bookingControl.getConfirmedGuestsSortedByBookingDate();
 
         int standardSuiteCount = 0;
         int deluxeSuiteCount = 0;
         int executiveVillaCount = 0;
         int oceanVillaCount = 0;
 
-        System.out.println(
-                "\n=============================================================="
-        );
+        System.out.println("\n==============================================================");
         System.out.println("                  ASSIGNED GUEST REPORT");
-        System.out.println(
-                "=============================================================="
-        );
-        System.out.println(
-                "Sorted By: Booking Date (Earliest to Latest)"
-        );
-        System.out.println(
-                "--------------------------------------------------------------"
-        );
+        System.out.println("==============================================================");
+
+        System.out.println("Sorted By        : Booking Date "+ "(Earliest to Latest)");
+
+        System.out.println("Room Type Filter : " + roomTypeFilter);
+
+        System.out.println("Date Filter      : "+ (dateFilter == null ? "All Dates": dateFilter.format(DateTimeFormatter.ofPattern("dd-MM-yyyy"))));
+
+        System.out.println("--------------------------------------------------------------");
 
         int number = 1;
 
         for (Guest guest : guests) {
 
-            System.out.println("Assigned Guest No. : " + number);
-            System.out.println("Guest ID           : "
-                    + guest.getGuestID());
-            System.out.println("Guest Name         : "
-                    + guest.getGuestName());
-            System.out.println("Phone Number       : "
-                    + guest.getPhoneNumber());
-            System.out.println("Room Type          : "
-                    + guest.getRoomType());
-            System.out.println("Room Number        : "
-                    + guest.getRoomNumber());
-            System.out.println("Booking Date       : "
-                    + guest.getBookingDate().format(DATE_FORMATTER));
-            System.out.println("Status             : "
-                    + guest.getStatus());
-
             System.out.println(
-                    "--------------------------------------------------------------"
+                    "Assigned Guest No. : " + number
             );
 
-            if (guest.getRoomType()
-                    .equalsIgnoreCase("Standard Suite")) {
+            System.out.println(
+                    "Guest ID           : "
+                    + guest.getGuestID()
+            );
 
-                standardSuiteCount++;
+            System.out.println(
+                    "Guest Name         : "
+                    + guest.getGuestName()
+            );
 
-            } else if (guest.getRoomType()
-                    .equalsIgnoreCase("Deluxe Suite")) {
+            System.out.println(
+                    "Phone Number       : "
+                    + guest.getPhoneNumber()
+            );
 
-                deluxeSuiteCount++;
+            System.out.println(
+                    "Room Type          : "
+                    + guest.getRoomType()
+            );
 
-            } else if (guest.getRoomType()
-                    .equalsIgnoreCase("Executive Villa")) {
+            System.out.println(
+                    "Room Number        : "
+                    + guest.getRoomNumber()
+            );
 
-                executiveVillaCount++;
+            System.out.println(
+                    "Booking Date       : "
+                    + guest.getBookingDate()
+                            .format(DATE_FORMATTER)
+            );
 
-            } else if (guest.getRoomType()
-                    .equalsIgnoreCase("Ocean Villa")) {
+            System.out.println(
+                    "Status             : "
+                    + guest.getStatus()
+            );
 
-                oceanVillaCount++;
-            }
+            System.out.println("--------------------------------------------------------------");
 
             number++;
         }
 
         System.out.println("\nREPORT SUMMARY");
 
-        System.out.println(
-                "Total Assigned Guests : " + guests.length
-        );
+        System.out.println("Total Assigned Guests : " + guests.length);
 
-        System.out.println(
-                "Standard Suite         : " + standardSuiteCount
-        );
+        System.out.println("Standard Suite         : " + standardSuiteCount);
 
-        System.out.println(
-                "Deluxe Suite           : " + deluxeSuiteCount
-        );
+        System.out.println("Deluxe Suite           : " + deluxeSuiteCount);
 
-        System.out.println(
-                "Executive Villa        : " + executiveVillaCount
-        );
+        System.out.println("Executive Villa        : " + executiveVillaCount);
 
-        System.out.println(
-                "Ocean Villa            : " + oceanVillaCount
-        );
+        System.out.println("Ocean Villa            : " + oceanVillaCount);
 
-        System.out.println(
-                "=============================================================="
-        );
+        System.out.println("==============================================================");
     }
 
     public void searchGuestUI() {
@@ -479,16 +478,10 @@ public class BookingUI {
             System.out.println("Guest Name    : " + guest.getGuestName());
             System.out.println("Phone Number  : " + guest.getPhoneNumber());
             System.out.println("Room Type     : " + guest.getRoomType());
-            System.out.println("Room Number   : "
-                    + (guest.getRoomNumber() == null
-                    ? "-"
-                    : guest.getRoomNumber()));
-
+            System.out.println("Room Number   : "+ (guest.getRoomNumber() == null ? "-" : guest.getRoomNumber()));
             System.out.println("Booking Date  : " + guest.getBookingDate().format(DATE_FORMATTER));
-
             System.out.println("Status        : " + guest.getStatus());
             System.out.println("===================================");
-
         }
     }
 
@@ -506,10 +499,7 @@ public class BookingUI {
                     return value;
                 }
 
-                System.out.println(
-                        "Please enter a number between "
-                        + min + " and " + max + "."
-                );
+                System.out.println("Please enter a number between "+ min + " and " + max + ".");
 
             } catch (NumberFormatException e) {
                 System.out.println("Invalid input. Please enter a number.");
@@ -522,18 +512,81 @@ public class BookingUI {
         while (true) {
             System.out.print(prompt);
 
-            String guestID = scanner.nextLine()
-                    .trim()
-                    .toUpperCase();
+            String guestID = scanner.nextLine().trim().toUpperCase();
 
             if (guestID.matches("G\\d{4}")) {
                 return guestID;
             }
 
-            System.out.println(
-                    "Invalid Guest ID format. "
-                    + "Use format G0001."
+            System.out.println("Invalid Guest ID format.Please follow the format e.g. 'G0001'."
             );
+        }
+    }
+
+    private String selectRoomTypeFilter() {
+
+        System.out.println("\n===== ROOM TYPE FILTER =====");
+        System.out.println("1. All Room Types");
+        System.out.println("2. Standard Suite");
+        System.out.println("3. Deluxe Suite");
+        System.out.println("4. Executive Villa");
+        System.out.println("5. Ocean Villa");
+
+        int choice = readValidInteger("Choose filter: ",1,5);
+
+        switch (choice) {
+            case 1:
+                return "All";
+
+            case 2:
+                return "Standard Suite";
+
+            case 3:
+                return "Deluxe Suite";
+
+            case 4:
+                return "Executive Villa";
+
+            case 5:
+                return "Ocean Villa";
+
+            default:
+                return "All";
+        }
+    }
+
+    private LocalDate selectDateFilter() {
+
+        System.out.println("\n===== BOOKING DATE FILTER =====");
+        System.out.println("1. All Dates");
+        System.out.println("2. Specific Date");
+
+        int choice = readValidInteger("Choose filter: ",1,2);
+
+        if (choice == 1) {
+            return null;
+        }
+
+        DateTimeFormatter formatter
+                = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+
+        while (true) {
+
+            System.out.print("Enter date (dd-MM-yyyy): ");
+
+            String input = scanner.nextLine().trim();
+
+            try {
+
+                return LocalDate.parse(
+                        input,
+                        formatter
+                );
+
+            } catch (DateTimeParseException e) {
+
+                System.out.println("Invalid date. Example: 20-08-2026");
+            }
         }
     }
 
