@@ -1,5 +1,6 @@
-// Author: Bong Xin Yee
-// Handles data aggregation and filtering for the two housekeeping reports
+/* Author: Bong Xin Yee
+ * Handles data aggregation and filtering for the two housekeeping reports
+ */
 package control;
 
 import entity.CleaningStatus;

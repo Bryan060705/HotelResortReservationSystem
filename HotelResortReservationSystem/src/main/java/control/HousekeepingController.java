@@ -1,6 +1,7 @@
-// Author: Bong Xin Yee
-// Main controller for the housekeeping module
-// Uses ArrayStack to handle the undo/rollback feature
+/* Author: Bong Xin Yee
+ * Main controller for the housekeeping module
+ * Uses ArrayStack to handle the undo/rollback feature
+ */
 package control;
 
 import adt.ArrayStack;
