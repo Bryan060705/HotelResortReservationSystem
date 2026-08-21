@@ -166,10 +166,6 @@ public class BookingControl {
         return confirmedBookings.getIterator();
     }
 
-    public int getConfirmedBookingCount() {
-        return confirmedBookings.size();
-    }
-
     public int getWaitingGuestCount() {
         return bookingQueue.size();
     }
