@@ -441,7 +441,26 @@ public class BookingUI {
                     + guest.getStatus()
             );
 
-            System.out.println("--------------------------------------------------------------");
+            System.out.println(
+                    "--------------------------------------------------------------"
+            );
+
+            // Count assigned guests by room type
+            if (guest.getRoomType().equalsIgnoreCase("Standard Suite")) {
+                standardSuiteCount++;
+
+            } else if (guest.getRoomType()
+                    .equalsIgnoreCase("Deluxe Suite")) {
+                deluxeSuiteCount++;
+
+            } else if (guest.getRoomType()
+                    .equalsIgnoreCase("Executive Villa")) {
+                executiveVillaCount++;
+
+            } else if (guest.getRoomType()
+                    .equalsIgnoreCase("Ocean Villa")) {
+                oceanVillaCount++;
+            }
 
             number++;
         }
